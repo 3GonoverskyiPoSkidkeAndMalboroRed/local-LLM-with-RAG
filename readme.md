@@ -61,9 +61,27 @@ This will start a local web server and open a new tab in your default web browse
 
 адрес - http://192.168.81.143:8000/docs#/default/initialize_initialize_post
 
+
+запуск Pavel_M - uvicorn app:app --host 0.0.0.0 --port 8501
+адрес Pavel_M - http://192.168.80.87:8501/docs#/default/initialize_initialize_post
+
+
 параметры для инициализации - 
 {
   "model_name": "mistral",
   "embedding_model_name": "nomic-embed-text",
+  "documents_path": "Research"
+}
+
+
+{
+  "model_name": "gemma3:27b-it-qat",
+  "embedding_model_name": "snowflake-arctic-embed2:latest",
+  "documents_path": "Research"
+}
+
+{
+  "model_name": "ilyagusev/saiga_llama3:latest",
+  "embedding_model_name": "snowflake-arctic-embed2:latest",
   "documents_path": "Research"
 }
