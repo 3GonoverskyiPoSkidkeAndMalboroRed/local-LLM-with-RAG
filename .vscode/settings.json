@@ -1,0 +1,14 @@
+{
+    "sqltools.connections": [
+        {
+            "name": "local-llm-rag",
+            "driver": "MySQL",
+            "server": "localhost",
+            "port": 3307,
+            "database": "db",
+            "username": "root",
+            "password": "123123",
+            "connectionTimeout": 15000
+        }
+    ]
+}

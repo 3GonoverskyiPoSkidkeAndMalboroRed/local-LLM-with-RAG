@@ -22,7 +22,7 @@ Thank you very much to [amscotti](https://github.com/amscotti) whose repository 
 
 
 ## Запуск
-1. Запускаем СЕРВЕР------------------->`uvicorn app:app --host 192.168.81.10 --port 8000` 
+1. Запускаем СЕРВЕР------------------->`uvicorn app:app --host 0.0.0.0 --port 8000` 
 2. Запускаем ИНТЕРФЕЙС ПОЛЬЗОВАТЕЛЯ--->`streamlit run ui_client.py`
 
 
