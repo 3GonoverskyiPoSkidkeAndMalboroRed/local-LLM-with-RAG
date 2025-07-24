@@ -55,7 +55,7 @@
               <td>
                 <p class="text-xs font-weight-bold mb-0">{{ user.access_name }}</p>
               </td>
-              <td class="align-middle">
+              <td class="align-middle gap-1">
                 <button @click="openEditModal(user)" class="btn btn-link text-secondary mb-0" title="Редактировать пользователя">
                   <i class="fa fa-edit text-xs"></i>
                 </button>
