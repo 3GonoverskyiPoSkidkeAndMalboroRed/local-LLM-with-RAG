@@ -69,7 +69,10 @@ class LLMStateManager:
         self.all_tasks = {}  # Все задачи (включая завершенные)
         
         # Настройки - ОПТИМИЗАЦИЯ скорости с сохранением стабильности  
-        self.max_concurrent_requests_per_department = 3  # 3 запроса после оптимизации
+        self.max_concurrent_requests_per_department = 1  # Только 1 запрос одновременно
+        self.model_switch_delay = 2.0  # 2 секунды между переключениями моделей
+        self.retry_attempts = 3  # Количество попыток при сбое
+        self.health_check_interval = 30  # Проверка здоровья каждые 30 секунд
         
         # Глобальная блокировка для thread-safety
         self.global_lock = threading.Lock()
@@ -477,6 +480,23 @@ class LLMStateManager:
                     stuck_tasks[department_id] = department_stuck
         
         return stuck_tasks
+
+    async def check_model_health(self, department_id: str) -> bool:
+        """Проверяет доступность модели"""
+        try:
+            chat_instance = self.get_department_async_chat(department_id)
+            if not chat_instance:
+                return False
+            
+            # Простой тестовый запрос
+            test_result = await asyncio.wait_for(
+                chat_instance("test"),
+                timeout=10
+            )
+            return test_result.get("success", False)
+        except Exception as e:
+            print(f"Ошибка проверки здоровья модели для отдела {department_id}: {e}")
+            return False
 
 # Получаем единственный экземпляр менеджера состояния через функцию
 llm_state_manager = get_llm_state_manager() 

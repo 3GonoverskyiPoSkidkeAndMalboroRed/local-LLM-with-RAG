@@ -136,8 +136,8 @@ async def process_query_task(task_id: str):
             
             print(f"Задача {task_id}: Векторный поиск выполнен за {time.time() - start_time:.2f} секунд")
             
-            # ЗНАЧИТЕЛЬНО увеличиваем паузу после embedding для предотвращения падений Ollama
-            await asyncio.sleep(0.5)  # Минимальная пауза для переключения моделей
+            # Увеличить паузы между операциями:
+            await asyncio.sleep(2.0)  # После embedding
             
             if not top_chunks:
                 print(f"Задача {task_id}: Векторный поиск не вернул результатов")
@@ -154,8 +154,8 @@ async def process_query_task(task_id: str):
             # Устанавливаем таймаут для запроса к LLM
             response_start_time = time.time()
             
-            # ЗНАЧИТЕЛЬНО увеличиваем паузу перед LLM запросом для Ollama
-            await asyncio.sleep(0.2)  # Минимальная пауза перед LLM генерацией
+            # Перед LLM запросом
+            await asyncio.sleep(1.0) 
             
             # Выполняем асинхронный запрос к LLM с тайм-аутом
             chat_result = await asyncio.wait_for(
