@@ -130,9 +130,7 @@ a:focus {
   color: var(--primary-color);
 }
 
-.nav-link.active {
-  color: var(--accent-color);
-}
+
 
 /* ТАБЛИЦЫ */
 .table tbody tr:hover {

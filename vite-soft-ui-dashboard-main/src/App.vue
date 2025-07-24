@@ -6,10 +6,16 @@
       $store.state.isTransparent,
       $store.state.isRTL ? 'fixed-end' : 'fixed-start',
     ]"
+    @sidenav-state="onSidenavState"
   />
   <main
     class="main-content position-relative max-height-vh-100 h-100 border-radius-lg"
+    :class="{
+      'content-shifted': sidenavMobileOpen,
+      'content-overlayed': sidenavMobileOpen
+    }"
     :style="$store.state.isRTL ? 'overflow-x: hidden' : ''"
+    @click="closeSidenavOnMobile"
   >
     <!-- nav -->
     <navbar
@@ -62,9 +68,44 @@ export default {
   created() {
     this.restoreAuthentication();
   },
+  data() {
+    return {
+      sidenavMobileOpen: false,
+    };
+  },
   methods: {
     ...mapMutations(["toggleConfigurator", "navbarMinimize"]),
-    ...mapActions(["restoreAuthentication"])
+    ...mapActions(["restoreAuthentication"]),
+    onSidenavState(isOpen) {
+      this.sidenavMobileOpen = isOpen;
+    },
+    closeSidenavOnMobile() {
+      // Закрывать меню при клике вне меню на мобильных
+      if (this.sidenavMobileOpen && window.innerWidth < 992) {
+        this.sidenavMobileOpen = false;
+        // Можно вызвать метод закрытия через $refs, если нужно
+      }
+    }
   },
 };
 </script>
+
+<style>
+@media (max-width: 991px) {
+  .main-content.content-shifted {
+    filter: blur(2px);
+    pointer-events: none;
+    user-select: none;
+  }
+  .main-content.content-overlayed {
+    /* Можно добавить затемнение, если не хотите блюр */
+    /* background: rgba(0,0,0,0.1); */
+  }
+}
+@media (min-width: 992px) {
+  .main-content {
+    margin-left: 260px; /* ширина сайдбара */
+    transition: margin-left 0.3s;
+  }
+}
+</style>
