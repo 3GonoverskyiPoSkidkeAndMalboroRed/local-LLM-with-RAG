@@ -51,7 +51,7 @@ services:
     volumes:
       - ./vite-soft-ui-dashboard-main/nginx.conf:/etc/nginx/conf.d/default.conf
     environment:
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:8081/api}
+      - VITE_API_URL=${VITE_API_URL:-http://nginx:80/api}
     networks:
       - app-network
 

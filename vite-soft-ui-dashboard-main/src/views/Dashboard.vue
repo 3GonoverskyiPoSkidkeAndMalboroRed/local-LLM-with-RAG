@@ -58,17 +58,26 @@
         </router-link>
       </div>
     </div>
+    
+    <!-- Компонент для просмотра Word документов -->
+    <WordViewer 
+      ref="wordViewer"
+      :documentId="selectedDocumentId"
+      :documentTitle="selectedDocumentTitle"
+      :documentDescription="selectedDocumentDescription"
+    />
   </div>
 </template>
 
 <script>
-import axios from 'axios';
+import axiosInstance from '@/utils/axiosConfig';
 import { Modal } from 'bootstrap';
+import WordViewer from '@/components/WordViewer.vue';
 
 export default {
   name: "DashboardDefault",
   components: {
-    // Удаляем импорт QuizTable
+    WordViewer
   },
   data() {
     return {
@@ -87,7 +96,10 @@ export default {
       currentMediaType: "",
       currentMediaTitle: "",
       isAudioFile: false,
-      isVideoFile: false
+      isVideoFile: false,
+      selectedDocumentId: null,
+      selectedDocumentTitle: '',
+      selectedDocumentDescription: ''
     };
   },
   async created() {
@@ -117,7 +129,7 @@ export default {
     async fetchContentByTags() {
       try {
         this.loading = true;
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/user/${this.userId}/content/by-tags`);
+        const response = await axiosInstance.get(`/user/${this.userId}/content/by-tags`);
         this.contentData = response.data;
 
         // Отладка: выводим полученные данные о контенте
@@ -138,7 +150,7 @@ export default {
     async searchDocuments() {
       if (this.searchQuery.length > 0) {
         try {
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/content/search-documents?user_id=${this.userId}&search_query=${this.searchQuery}`);
+          const response = await axiosInstance.get(`/content/search-documents?user_id=${this.userId}&search_query=${this.searchQuery}`);
           this.documents = response.data.documents; // Обновляем список документов
         } catch (error) {
           console.error("Ошибка при поиске документов:", error);
@@ -169,7 +181,7 @@ export default {
       // Проверяем, является ли файл аудио или видео
       if (this.isAudio(fileExtension) || this.isVideo(fileExtension)) {
         // Настраиваем модальное окно для медиа файла
-        this.currentMediaUrl = `${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`;
+        this.currentMediaUrl = `${axiosInstance.defaults.baseURL}/content/view-file/${doc.id}`;
         this.currentMediaTitle = doc.title || this.getFileName(doc.file_path);
         
         // Устанавливаем тип медиа
@@ -185,23 +197,31 @@ export default {
         
         // Открываем модальное окно
         this.mediaPlayerModal.show();
+      } else if (fileExtension === 'docx') {
+        // Для Word документов используем модальное окно
+        this.selectedDocumentId = doc.id;
+        this.selectedDocumentTitle = doc.title;
+        this.selectedDocumentDescription = doc.description;
+        this.$nextTick(() => {
+          this.$refs.wordViewer.show();
+        });
       } else {
         // Для других типов файлов открываем в новой вкладке
-        window.open(`${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`, '_blank');
+        window.open(`${axiosInstance.defaults.baseURL}/content/view-file/${doc.id}`, '_blank');
       }
     },
     async downloadDocument(doc) {
       try {
         // Скачивание документа
-        window.location.href = `${import.meta.env.VITE_API_URL}/content/download-file/${doc.id}`;
+        window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
       } catch (error) {
         console.error("Ошибка при скачивании документа:", error);
       }
     },
     copyLink(docId, action) {
       const url = action === 'view' 
-        ? `${import.meta.env.VITE_API_URL}/content/view-file/${docId}` 
-        : `${import.meta.env.VITE_API_URL}/content/download-file/${docId}`;
+        ? `${axiosInstance.defaults.baseURL}/content/view-file/${docId}` 
+        : `${axiosInstance.defaults.baseURL}/content/download-file/${docId}`;
       
       if (navigator.clipboard) {
         navigator.clipboard.writeText(url).then(() => {

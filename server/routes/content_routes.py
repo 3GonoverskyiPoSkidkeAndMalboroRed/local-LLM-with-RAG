@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models_db import Access, Content, User, Tag
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from typing import List
+import docx2txt
+from docx import Document
 
 
 router = APIRouter(prefix="/content", tags=["content"])
@@ -380,6 +382,8 @@ async def view_file(content_id: int, db: Session = Depends(get_db)):
     # Устанавливаем соответствующий media_type в зависимости от расширения файла
     if file_extension in ['.pdf']:
         media_type = 'application/pdf'
+    elif file_extension in ['.docx']:
+        media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     elif file_extension in ['.mp3', '.wav', '.ogg']:
         media_type = f'audio/{file_extension[1:]}'
     elif file_extension in ['.mp4', '.webm', '.avi', '.mov']:
@@ -392,6 +396,159 @@ async def view_file(content_id: int, db: Session = Depends(get_db)):
 
     # Возвращаем файл как ответ с заголовком для открытия в браузере
     return FileResponse(file_path, media_type=media_type, filename=os.path.basename(file_path), headers={"Content-Disposition": "inline"})
+
+@router.get("/view-word/{content_id}")
+async def view_word_document(content_id: int, db: Session = Depends(get_db)):
+    """
+    Конвертирует Word документ в HTML для просмотра в браузере
+    """
+    # Получаем контент из базы данных по ID
+    content = db.query(Content).filter(Content.id == content_id).first()
+    if content is None:
+        raise HTTPException(status_code=404, detail="Контент не найден")
+
+    # Проверяем, существует ли файл
+    file_path = content.file_path
+    if not os.path.exists(file_path):
+        # Если файл не найден по абсолютному пути, проверяем, может быть это старый путь
+        if not file_path.startswith('/app/files/'):
+            new_path = f"/app/files/{os.path.basename(file_path)}"
+            if os.path.exists(new_path):
+                file_path = new_path
+            else:
+                raise HTTPException(status_code=404, detail="Файл не найден")
+        else:
+            raise HTTPException(status_code=404, detail="Файл не найден")
+
+    # Проверяем, что это Word документ
+    file_extension = os.path.splitext(file_path)[1].lower()
+    if file_extension not in ['.docx']:
+        raise HTTPException(status_code=400, detail="Файл не является Word документом")
+
+    try:
+        # Извлекаем текст из Word документа
+        text = docx2txt.process(file_path)
+        
+        # Создаем HTML страницу для просмотра
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{content.title}</title>
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    margin: 0;
+                    padding: 20px;
+                    background-color: #f8f9fa;
+                }}
+                .container {{
+                    max-width: 800px;
+                    margin: 0 auto;
+                    background-color: white;
+                    padding: 30px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                }}
+                .header {{
+                    border-bottom: 2px solid #e9ecef;
+                    padding-bottom: 20px;
+                    margin-bottom: 30px;
+                }}
+                .title {{
+                    color: #2c3e50;
+                    margin: 0 0 10px 0;
+                    font-size: 24px;
+                }}
+                .description {{
+                    color: #6c757d;
+                    margin: 0;
+                    font-style: italic;
+                }}
+                .content {{
+                    white-space: pre-wrap;
+                    font-size: 16px;
+                    color: #333;
+                    line-height: 1.8;
+                }}
+                .back-button {{
+                    display: inline-block;
+                    margin-bottom: 20px;
+                    padding: 10px 20px;
+                    background-color: #007bff;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    transition: background-color 0.3s;
+                }}
+                .back-button:hover {{
+                    background-color: #0056b3;
+                    color: white;
+                    text-decoration: none;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <a href="javascript:history.back()" class="back-button">← Назад</a>
+                <div class="header">
+                    <h1 class="title">{content.title}</h1>
+                    <p class="description">{content.description}</p>
+                </div>
+                <div class="content">{text}</div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при обработке Word документа: {str(e)}")
+
+@router.get("/word-content/{content_id}")
+async def get_word_content(content_id: int, db: Session = Depends(get_db)):
+    """
+    Возвращает только текст Word документа в формате JSON
+    """
+    # Получаем контент из базы данных по ID
+    content = db.query(Content).filter(Content.id == content_id).first()
+    if content is None:
+        raise HTTPException(status_code=404, detail="Контент не найден")
+
+    # Проверяем, существует ли файл
+    file_path = content.file_path
+    if not os.path.exists(file_path):
+        # Если файл не найден по абсолютному пути, проверяем, может быть это старый путь
+        if not file_path.startswith('/app/files/'):
+            new_path = f"/app/files/{os.path.basename(file_path)}"
+            if os.path.exists(new_path):
+                file_path = new_path
+            else:
+                raise HTTPException(status_code=404, detail="Файл не найден")
+        else:
+            raise HTTPException(status_code=404, detail="Файл не найден")
+
+    # Проверяем, что это Word документ
+    file_extension = os.path.splitext(file_path)[1].lower()
+    if file_extension not in ['.docx']:
+        raise HTTPException(status_code=400, detail="Файл не является Word документом")
+
+    try:
+        # Извлекаем текст из Word документа
+        text = docx2txt.process(file_path)
+        
+        return {
+            "title": content.title,
+            "description": content.description,
+            "content": text
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при обработке Word документа: {str(e)}")
 
 @router.get("/user/{user_id}/content/by-tags/{tag_id}")
 async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Session = Depends(get_db)):
