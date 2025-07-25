@@ -1,14 +1,17 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request
 import os
 from sqlalchemy.orm import Session
 from database import get_db
 from models_db import Access, Content, User, Tag
 from pydantic import BaseModel
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from typing import List
 import docx2txt
 from docx import Document
 import re
+import requests
+import shutil
+from onlyoffice_service import onlyoffice_service
 
 
 router = APIRouter(prefix="/content", tags=["content"])
@@ -826,3 +829,203 @@ async def delete_tag(tag_id: int, db: Session = Depends(get_db)):
         return {"message": "Тег успешно удален"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при удалении тега: {str(e)}") 
+
+# OnlyOffice маршруты
+@router.get("/onlyoffice/{content_id}")
+async def get_onlyoffice_config(
+    content_id: int, 
+    user_id: int = 1,
+    user_name: str = "Пользователь",
+    mode: str = "view",
+    db: Session = Depends(get_db)
+):
+    """Получает конфигурацию OnlyOffice для документа"""
+    try:
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if not content:
+            raise HTTPException(status_code=404, detail="Документ не найден")
+        
+        # Проверяем, поддерживается ли тип файла
+        file_ext = content.file_path.lower().split('.')[-1]
+        supported_extensions = ['doc', 'docx', 'odt', 'rtf', 'txt', 'pdf', 'xls', 'xlsx', 'ods', 'ppt', 'pptx', 'odp']
+        
+        if file_ext not in supported_extensions:
+            raise HTTPException(status_code=400, detail="Тип файла не поддерживается OnlyOffice")
+        
+        # Создаем конфигурацию для OnlyOffice
+        config = onlyoffice_service.create_document_config(
+            file_path=content.file_path,
+            file_name=content.title,
+            file_id=str(content_id),
+            user_id=user_id,
+            user_name=user_name,
+            mode=mode
+        )
+        
+        return {
+            "config": config,
+            "editor_url": onlyoffice_service.get_editor_url(config),
+            "document_info": {
+                "id": content.id,
+                "title": content.title,
+                "description": content.description,
+                "file_path": content.file_path
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании конфигурации OnlyOffice: {str(e)}")
+
+@router.post("/save-onlyoffice/{content_id}")
+async def save_onlyoffice_document(
+    content_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Сохраняет документ из OnlyOffice"""
+    try:
+        # Получаем данные из запроса
+        body = await request.json()
+        
+        # Получаем токен из заголовка
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            raise HTTPException(status_code=401, detail="Отсутствует токен авторизации")
+        
+        token = auth_header.replace("Bearer ", "")
+        
+        # Проверяем подлинность callback
+        if not onlyoffice_service.verify_callback(token, body):
+            raise HTTPException(status_code=401, detail="Недействительный токен")
+        
+        # Получаем контент из базы данных
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if not content:
+            raise HTTPException(status_code=404, detail="Документ не найден")
+        
+        # Проверяем статус
+        status = body.get('status')
+        if status == 2:  # Документ готов к сохранению
+            # Получаем URL для скачивания обновленного файла
+            download_url = body.get('url')
+            if download_url:
+                # Скачиваем обновленный файл
+                response = requests.get(download_url)
+                if response.status_code == 200:
+                    # Сохраняем файл
+                    with open(content.file_path, 'wb') as f:
+                        f.write(response.content)
+                    
+                    return {"status": "success", "message": "Документ успешно сохранен"}
+                else:
+                    raise HTTPException(status_code=500, detail="Ошибка при скачивании обновленного файла")
+            else:
+                raise HTTPException(status_code=400, detail="URL для скачивания не предоставлен")
+        elif status == 1:  # Документ редактируется
+            return {"status": "editing", "message": "Документ редактируется"}
+        elif status == 3:  # Ошибка при сохранении
+            raise HTTPException(status_code=500, detail="Ошибка при сохранении документа")
+        else:
+            return {"status": "unknown", "message": f"Неизвестный статус: {status}"}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при сохранении документа: {str(e)}")
+
+@router.get("/onlyoffice-editor/{content_id}")
+async def get_onlyoffice_editor_page(
+    content_id: int,
+    user_id: int = 1,
+    user_name: str = "Пользователь",
+    mode: str = "view",
+    db: Session = Depends(get_db)
+):
+    """Возвращает HTML страницу с встроенным OnlyOffice редактором"""
+    try:
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if not content:
+            raise HTTPException(status_code=404, detail="Документ не найден")
+        
+        # Создаем конфигурацию для OnlyOffice
+        config = onlyoffice_service.create_document_config(
+            file_path=content.file_path,
+            file_name=content.title,
+            file_id=str(content_id),
+            user_id=user_id,
+            user_name=user_name,
+            mode=mode
+        )
+        
+        # Создаем HTML страницу
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{content.title} - OnlyOffice</title>
+            <style>
+                body {{
+                    margin: 0;
+                    padding: 0;
+                    font-family: Arial, sans-serif;
+                }}
+                #placeholder {{
+                    width: 100%;
+                    height: 100vh;
+                }}
+                .header {{
+                    background: #f8f9fa;
+                    padding: 10px 20px;
+                    border-bottom: 1px solid #dee2e6;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }}
+                .header h1 {{
+                    margin: 0;
+                    font-size: 18px;
+                    color: #333;
+                }}
+                .header .controls {{
+                    display: flex;
+                    gap: 10px;
+                }}
+                .btn {{
+                    padding: 8px 16px;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    text-decoration: none;
+                    font-size: 14px;
+                }}
+                .btn-primary {{
+                    background: #007bff;
+                    color: white;
+                }}
+                .btn-secondary {{
+                    background: #6c757d;
+                    color: white;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>{content.title}</h1>
+                <div class="controls">
+                    <a href="/content/download-file/{content_id}" class="btn btn-primary">Скачать</a>
+                    <a href="javascript:history.back()" class="btn btn-secondary">Назад</a>
+                </div>
+            </div>
+            <div id="placeholder"></div>
+            
+            <script type="text/javascript" src="{onlyoffice_service.get_editor_url(config)}"></script>
+            <script type="text/javascript">
+                {onlyoffice_service.create_editor_config(config)}
+            </script>
+        </body>
+        </html>
+        """
+        
+        return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы редактора: {str(e)}")

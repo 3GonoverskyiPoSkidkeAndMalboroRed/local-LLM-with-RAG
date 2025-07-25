@@ -1,6 +1,7 @@
 <template>
-  <div class="card mb-4">
-    <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+  <div>
+    <div class="card mb-4">
+      <div class="card-header pb-0 d-flex justify-content-between align-items-center">
       <h6>Таблица контента {{ isAdmin ? '(Режим администратора)' : '' }}</h6>
       <span v-if="isAdmin" class="badge bg-gradient-success">Администратор</span>
     </div>
@@ -48,19 +49,30 @@
               </td>
               <td class="align-middle text-center">
                 <div class="d-flex justify-content-center">
+                  <button
+                    v-if="isFileSupported(content.file_path)"
+                    @click="openOnlyOffice(content)"
+                    class="btn btn-sm btn-outline-primary me-2"
+                    title="Открыть в OnlyOffice"
+                  >
+                    <i class="fas fa-eye me-1"></i>Просмотр
+                  </button>
                   <a
                     :href="getDownloadLink(content.id)"
-                    class="text-secondary font-weight-bold text-xs me-3"
-                    data-toggle="tooltip"
-                    data-original-title="Скачать файл"
-                  >Скачать</a>
+                    class="btn btn-sm btn-outline-secondary me-2"
+                    title="Скачать файл"
+                  >
+                    <i class="fas fa-download me-1"></i>Скачать
+                  </a>
                   <a
+                    v-if="isAdmin"
                     href="#"
-                    class="text-danger font-weight-bold text-xs"
-                    data-toggle="tooltip"
-                    data-original-title="Удалить контент"
+                    class="btn btn-sm btn-outline-danger"
+                    title="Удалить контент"
                     @click.prevent="deleteContent(content.id)"
-                  >Удалить</a>
+                  >
+                    <i class="fas fa-trash me-1"></i>Удалить
+                  </a>
                 </div>
               </td>
             </tr>
@@ -73,18 +85,40 @@
         </table>
       </div>
     </div>
+    </div>
+    
+    <!-- OnlyOffice Viewer Modal -->
+    <OnlyOfficeViewer
+      ref="onlyofficeViewer"
+      :document-id="selectedDocument.id"
+      :document-title="selectedDocument.title"
+      :document-description="selectedDocument.description"
+      :user-id="currentUserId"
+      :user-name="currentUserName"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import OnlyOfficeViewer from '../../components/OnlyOfficeViewer.vue';
 
 export default {
   name: "ContentTable",
+  components: {
+    OnlyOfficeViewer
+  },
   data() {
     return {
       contents: [],
       isAdmin: false,
+      selectedDocument: {
+        id: null,
+        title: '',
+        description: ''
+      },
+      currentUserId: 1,
+      currentUserName: 'Пользователь',
       departments: {
         1: "Клиенты",
         2: "Сервисная служба",
@@ -163,6 +197,33 @@ export default {
           alert('Произошла ошибка при удалении контента');
         }
       }
+    },
+    
+    // Проверка поддержки файла OnlyOffice
+    isFileSupported(filePath) {
+      const supportedExtensions = ['doc', 'docx', 'odt', 'rtf', 'txt', 'pdf', 'xls', 'xlsx', 'ods', 'ppt', 'pptx', 'odp'];
+      const extension = filePath.toLowerCase().split('.').pop();
+      return supportedExtensions.includes(extension);
+    },
+    
+    // Открытие документа в OnlyOffice
+    openOnlyOffice(content) {
+      this.selectedDocument = {
+        id: content.id,
+        title: content.title,
+        description: content.description
+      };
+      
+      // Получаем информацию о текущем пользователе
+      const userId = localStorage.getItem("userId");
+      if (userId) {
+        this.currentUserId = parseInt(userId);
+      }
+      
+      // Открываем OnlyOffice viewer
+      this.$nextTick(() => {
+        this.$refs.onlyofficeViewer.show();
+      });
     }
   }
 };
