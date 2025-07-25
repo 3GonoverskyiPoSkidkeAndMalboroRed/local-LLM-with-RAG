@@ -8,9 +8,138 @@ from fastapi.responses import FileResponse, HTMLResponse
 from typing import List
 import docx2txt
 from docx import Document
+import re
 
 
 router = APIRouter(prefix="/content", tags=["content"])
+
+def convert_docx_to_html_with_formatting(file_path: str) -> str:
+    """
+    Конвертирует Word документ в HTML с сохранением форматирования
+    """
+    try:
+        doc = Document(file_path)
+        html_parts = []
+        
+        for paragraph in doc.paragraphs:
+            if not paragraph.text.strip():  # Пропускаем пустые параграфы
+                html_parts.append('<br>')
+                continue
+                
+            # Определяем стиль параграфа
+            style = paragraph.style.name.lower()
+            
+            # Обрабатываем заголовки
+            if 'heading' in style:
+                level = 1
+                if 'heading 1' in style or 'title' in style:
+                    level = 1
+                elif 'heading 2' in style:
+                    level = 2
+                elif 'heading 3' in style:
+                    level = 3
+                elif 'heading 4' in style:
+                    level = 4
+                elif 'heading 5' in style:
+                    level = 5
+                elif 'heading 6' in style:
+                    level = 6
+                
+                html_parts.append(f'<h{level} class="docx-heading">{paragraph.text}</h{level}>')
+                continue
+            
+            # Обрабатываем списки
+            if 'list bullet' in style:
+                html_parts.append(f'<li class="docx-list-item">{paragraph.text}</li>')
+                continue
+            elif 'list number' in style:
+                html_parts.append(f'<li class="docx-list-item">{paragraph.text}</li>')
+                continue
+            
+            # Обрабатываем обычные параграфы
+            paragraph_html = '<p class="docx-paragraph">'
+            
+            for run in paragraph.runs:
+                text = run.text
+                if not text.strip():
+                    continue
+                    
+                # Применяем форматирование
+                if run.bold and run.italic:
+                    text = f'<strong><em>{text}</em></strong>'
+                elif run.bold:
+                    text = f'<strong>{text}</strong>'
+                elif run.italic:
+                    text = f'<em>{text}</em>'
+                
+                # Обрабатываем подчеркивание
+                if run.underline:
+                    text = f'<u>{text}</u>'
+                
+                # Обрабатываем зачеркивание
+                if hasattr(run, 'font') and hasattr(run.font, 'strike') and run.font.strike:
+                    text = f'<del>{text}</del>'
+                
+                paragraph_html += text
+            
+            paragraph_html += '</p>'
+            html_parts.append(paragraph_html)
+        
+        # Обрабатываем таблицы
+        for table in doc.tables:
+            table_html = '<table class="docx-table" border="1" cellpadding="5" cellspacing="0">'
+            
+            for row in table.rows:
+                table_html += '<tr>'
+                for cell in row.cells:
+                    table_html += f'<td class="docx-cell">{cell.text}</td>'
+                table_html += '</tr>'
+            
+            table_html += '</table>'
+            html_parts.append(table_html)
+        
+        # Группируем списки
+        html_content = '\n'.join(html_parts)
+        
+        # Обрабатываем списки - группируем последовательные элементы списка
+        # Находим все последовательные элементы списка и группируем их
+        lines = html_content.split('\n')
+        result_lines = []
+        i = 0
+        
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Если это элемент списка
+            if line.startswith('<li class="docx-list-item">'):
+                # Начинаем группу списка
+                result_lines.append('<ul class="docx-list">')
+                
+                # Добавляем текущий элемент
+                result_lines.append(line)
+                
+                # Ищем следующие элементы списка
+                j = i + 1
+                while j < len(lines) and lines[j].strip().startswith('<li class="docx-list-item">'):
+                    result_lines.append(lines[j].strip())
+                    j += 1
+                
+                # Закрываем группу списка
+                result_lines.append('</ul>')
+                i = j
+            else:
+                # Обычная строка
+                result_lines.append(line)
+                i += 1
+        
+        html_content = '\n'.join(result_lines)
+        
+        return html_content
+        
+    except Exception as e:
+        # Если не удалось обработать с форматированием, возвращаем простой текст
+        print(f"Ошибка при конвертации с форматированием: {e}")
+        return docx2txt.process(file_path)
 
 # # Эндпоинт для загрузки файлов
 # @router.post("/upload-file")
@@ -400,7 +529,7 @@ async def view_file(content_id: int, db: Session = Depends(get_db)):
 @router.get("/view-word/{content_id}")
 async def view_word_document(content_id: int, db: Session = Depends(get_db)):
     """
-    Конвертирует Word документ в HTML для просмотра в браузере
+    Конвертирует Word документ в HTML для просмотра в браузере с сохранением форматирования
     """
     # Получаем контент из базы данных по ID
     content = db.query(Content).filter(Content.id == content_id).first()
@@ -426,8 +555,8 @@ async def view_word_document(content_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Файл не является Word документом")
 
     try:
-        # Извлекаем текст из Word документа
-        text = docx2txt.process(file_path)
+        # Конвертируем Word документ в HTML с сохранением форматирования
+        formatted_content = convert_docx_to_html_with_formatting(file_path)
         
         # Создаем HTML страницу для просмотра
         html_content = f"""
@@ -446,7 +575,7 @@ async def view_word_document(content_id: int, db: Session = Depends(get_db)):
                     background-color: #f8f9fa;
                 }}
                 .container {{
-                    max-width: 800px;
+                    max-width: 900px;
                     margin: 0 auto;
                     background-color: white;
                     padding: 30px;
@@ -469,10 +598,30 @@ async def view_word_document(content_id: int, db: Session = Depends(get_db)):
                     font-style: italic;
                 }}
                 .content {{
-                    white-space: pre-wrap;
                     font-size: 16px;
                     color: #333;
                     line-height: 1.8;
+                }}
+                .docx-heading {{
+                    color: #2c3e50;
+                    margin-top: 20px;
+                    margin-bottom: 10px;
+                    font-weight: 600;
+                }}
+                .docx-paragraph {{
+                    margin-bottom: 12px;
+                    text-align: justify;
+                }}
+                .docx-table {{
+                    width: 100%;
+                    margin: 15px 0;
+                    border-collapse: collapse;
+                    border: 1px solid #ddd;
+                }}
+                .docx-cell {{
+                    padding: 8px;
+                    border: 1px solid #ddd;
+                    vertical-align: top;
                 }}
                 .back-button {{
                     display: inline-block;
@@ -489,6 +638,19 @@ async def view_word_document(content_id: int, db: Session = Depends(get_db)):
                     color: white;
                     text-decoration: none;
                 }}
+                strong {{
+                    font-weight: 600;
+                }}
+                em {{
+                    font-style: italic;
+                }}
+                u {{
+                    text-decoration: underline;
+                }}
+                del {{
+                    text-decoration: line-through;
+                    color: #6c757d;
+                }}
             </style>
         </head>
         <body>
@@ -498,7 +660,7 @@ async def view_word_document(content_id: int, db: Session = Depends(get_db)):
                     <h1 class="title">{content.title}</h1>
                     <p class="description">{content.description}</p>
                 </div>
-                <div class="content">{text}</div>
+                <div class="content">{formatted_content}</div>
             </div>
         </body>
         </html>
@@ -512,7 +674,7 @@ async def view_word_document(content_id: int, db: Session = Depends(get_db)):
 @router.get("/word-content/{content_id}")
 async def get_word_content(content_id: int, db: Session = Depends(get_db)):
     """
-    Возвращает только текст Word документа в формате JSON
+    Возвращает содержимое Word документа в формате JSON с сохранением форматирования
     """
     # Получаем контент из базы данных по ID
     content = db.query(Content).filter(Content.id == content_id).first()
@@ -538,13 +700,13 @@ async def get_word_content(content_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Файл не является Word документом")
 
     try:
-        # Извлекаем текст из Word документа
-        text = docx2txt.process(file_path)
+        # Конвертируем Word документ в HTML с сохранением форматирования
+        formatted_content = convert_docx_to_html_with_formatting(file_path)
         
         return {
             "title": content.title,
             "description": content.description,
-            "content": text
+            "content": formatted_content
         }
         
     except Exception as e:
