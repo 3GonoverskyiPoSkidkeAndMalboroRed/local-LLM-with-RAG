@@ -13,6 +13,8 @@ class OnlyOfficeService:
         self.jwt_secret = os.environ.get("ONLYOFFICE_JWT_SECRET", "your-secret-key-here")
         self.onlyoffice_url = os.environ.get("ONLYOFFICE_URL", "http://onlyoffice:80")
         self.api_url = os.environ.get("API_URL", "http://backend:8000")
+        # URL для внешнего доступа (через nginx)
+        self.external_url = os.environ.get("EXTERNAL_URL", "http://nginx:80")
         
     def generate_jwt_token(self, payload: Dict[str, Any]) -> str:
         """Генерирует JWT токен для OnlyOffice"""
@@ -40,11 +42,11 @@ class OnlyOfficeService:
         # Генерируем уникальный ключ для документа
         document_key = hashlib.md5(f"{file_id}_{user_id}".encode()).hexdigest()
         
-        # Создаем URL для загрузки файла
-        download_url = f"{self.api_url}/content/download-file/{file_id}"
+        # Создаем URL для загрузки файла (через nginx для доступа из OnlyOffice)
+        download_url = f"{self.external_url}/content/download-file/{file_id}"
         
         # Создаем URL для сохранения файла
-        save_url = f"{self.api_url}/content/save-onlyoffice/{file_id}"
+        save_url = f"{self.external_url}/content/save-onlyoffice/{file_id}"
         
         config = {
             "document": {

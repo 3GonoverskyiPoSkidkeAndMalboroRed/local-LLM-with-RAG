@@ -34,6 +34,7 @@ services:
       - ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET:-your-secret-key-here}
       - ONLYOFFICE_URL=http://onlyoffice:80
       - API_URL=http://backend:8000
+      - EXTERNAL_URL=http://nginx:80
     depends_on:
       db:
         condition: service_healthy
