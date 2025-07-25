@@ -133,15 +133,27 @@
         </div>
       </div>
     </div>
+    
+    <!-- Компонент для просмотра Word документов -->
+    <WordViewer 
+      ref="wordViewer"
+      :documentId="selectedDocumentId"
+      :documentTitle="selectedDocumentTitle"
+      :documentDescription="selectedDocumentDescription"
+    />
   </div>
 </template>
 
 <script>
-import axios from 'axios';
+import axiosInstance from '@/utils/axiosConfig';
 import { Modal, Toast } from 'bootstrap';
+import WordViewer from '@/components/WordViewer.vue';
 
 export default {
   name: "TagContentPage",
+  components: {
+    WordViewer
+  },
   data() {
     return {
       userId: localStorage.getItem("userId"),
@@ -157,7 +169,10 @@ export default {
       isAudioFile: false,
       isVideoFile: false,
       copyToast: null,
-      searchQuery: "" // Поле для хранения поискового запроса
+      searchQuery: "", // Поле для хранения поискового запроса
+      selectedDocumentId: null,
+      selectedDocumentTitle: '',
+      selectedDocumentDescription: ''
     };
   },
   async created() {
@@ -203,11 +218,11 @@ export default {
         let response;
         if (this.tagId === 'untagged') {
           // Получаем документы без тега
-          response = await axios.get(`${import.meta.env.VITE_API_URL}/user/${this.userId}/content/untagged`);
+          response = await axiosInstance.get(`/user/${this.userId}/content/untagged`);
           this.documents = response.data;
         } else {
           // Получаем документы по ID тега с использованием нового эндпоинта
-          response = await axios.get(`${import.meta.env.VITE_API_URL}/content/user/${this.userId}/content/by-tags/${this.tagId}`);
+          response = await axiosInstance.get(`/content/user/${this.userId}/content/by-tags/${this.tagId}`);
           this.documents = response.data;
           console.log('Получены документы по тегу:', this.documents);
         }
@@ -260,23 +275,31 @@ export default {
         
         // Открываем модальное окно
         this.mediaPlayerModal.show();
+      } else if (fileExtension === 'docx') {
+        // Для Word документов используем модальное окно
+        this.selectedDocumentId = doc.id;
+        this.selectedDocumentTitle = doc.title;
+        this.selectedDocumentDescription = doc.description;
+        this.$nextTick(() => {
+          this.$refs.wordViewer.show();
+        });
       } else {
         // Для других типов файлов открываем в новой вкладке
-        window.open(`${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`, '_blank');
+        window.open(`${axiosInstance.defaults.baseURL}/content/view-file/${doc.id}`, '_blank');
       }
     },
     async downloadDocument(doc) {
       try {
         // Скачивание документа
-        window.location.href = `${import.meta.env.VITE_API_URL}/content/download-file/${doc.id}`;
+        window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
       } catch (error) {
         console.error("Ошибка при скачивании документа:", error);
       }
     },
     copyLink(docId, action) {
       const url = action === 'view' 
-        ? `${import.meta.env.VITE_API_URL}/content/view-file/${docId}` 
-        : `${import.meta.env.VITE_API_URL}/content/download-file/${docId}`;
+        ? `${axiosInstance.defaults.baseURL}/content/view-file/${docId}` 
+        : `${axiosInstance.defaults.baseURL}/content/download-file/${docId}`;
       
       if (navigator.clipboard) {
         navigator.clipboard.writeText(url).then(() => {

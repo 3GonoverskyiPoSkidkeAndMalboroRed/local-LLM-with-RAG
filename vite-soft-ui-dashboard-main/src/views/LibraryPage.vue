@@ -65,14 +65,26 @@
         </div>
       </div>
     </div>
+    
+    <!-- Компонент для просмотра Word документов -->
+    <WordViewer 
+      ref="wordViewer"
+      :documentId="selectedDocumentId"
+      :documentTitle="selectedDocumentTitle"
+      :documentDescription="selectedDocumentDescription"
+    />
   </div>
 </template>
 
 <script>
-import axios from 'axios';
+import axiosInstance from '@/utils/axiosConfig';
+import WordViewer from '@/components/WordViewer.vue';
 
 export default {
   name: "LibraryPage",
+  components: {
+    WordViewer
+  },
   data() {
     return {
       userId: localStorage.getItem("userId"),
@@ -83,7 +95,10 @@ export default {
       loading: true,
       error: null,
       searchQuery: "",
-      documents: []
+      documents: [],
+      selectedDocumentId: null,
+      selectedDocumentTitle: '',
+      selectedDocumentDescription: ''
     };
   },
   async created() {
@@ -109,7 +124,7 @@ export default {
     async searchDocuments() {
       if (this.searchQuery.length > 0) {
         try {
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/content/search-documents?user_id=${this.userId}&search_query=${this.searchQuery}`);
+          const response = await axiosInstance.get(`/content/search-documents?user_id=${this.userId}&search_query=${this.searchQuery}`);
           this.documents = response.data.documents;
         } catch (error) {
           console.error("Ошибка при поиске документов:", error);
@@ -129,12 +144,25 @@ export default {
       });
     },
     viewDocument(doc) {
-      // Открываем документ для просмотра
-      window.open(`${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`, '_blank');
+      // Определяем тип файла по расширению
+      const fileExtension = doc.file_path.split('.').pop().toLowerCase();
+      
+      if (fileExtension === 'docx') {
+        // Для Word документов используем модальное окно
+        this.selectedDocumentId = doc.id;
+        this.selectedDocumentTitle = doc.title;
+        this.selectedDocumentDescription = doc.description;
+        this.$nextTick(() => {
+          this.$refs.wordViewer.show();
+        });
+      } else {
+        // Для других файлов используем стандартный маршрут
+        window.open(`${axiosInstance.defaults.baseURL}/content/view-file/${doc.id}`, '_blank');
+      }
     },
     downloadDocument(doc) {
       // Скачиваем документ
-      window.location.href = `${import.meta.env.VITE_API_URL}/content/download-file/${doc.id}`;
+      window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
     }
   }
 };

@@ -1,7 +1,8 @@
 from langchain_community.document_loaders import (
     DirectoryLoader,
     PyPDFLoader,
-    TextLoader
+    TextLoader,
+    Docx2txtLoader
 )
 import os
 from typing import List, Tuple
@@ -338,6 +339,12 @@ def load_documents(path: str) -> List[Document]:
             path,
             glob="**/*.md",
             loader_cls=TextLoader,
+            show_progress=True,
+        ),
+        ".docx": DirectoryLoader(
+            path,
+            glob="**/*.docx",
+            loader_cls=Docx2txtLoader,
             show_progress=True,
         ),
     }
