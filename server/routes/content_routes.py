@@ -1017,7 +1017,7 @@ async def get_onlyoffice_editor_page(
             </div>
             <div id="placeholder"></div>
             
-            <script type="text/javascript" src="{onlyoffice_service.get_editor_url(config)}"></script>
+            <script type="text/javascript" src="http://localhost:8082/web-apps/apps/api/documents/api.js"></script>
             <script type="text/javascript">
                 {onlyoffice_service.create_editor_config(config)}
             </script>
