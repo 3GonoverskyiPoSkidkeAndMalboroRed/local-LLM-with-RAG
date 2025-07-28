@@ -6,143 +6,178 @@ from models_db import Access, Content, User, Tag
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from typing import List
-import docx2txt
-from docx import Document
 import re
 import requests
 import shutil
-from onlyoffice_service import onlyoffice_service
-
 
 router = APIRouter(prefix="/content", tags=["content"])
 
-def convert_docx_to_html_with_formatting(file_path: str) -> str:
+@router.get("/document-viewer/{content_id}")
+async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db)):
     """
-    Конвертирует Word документ в HTML с сохранением форматирования
+    Возвращает HTML страницу для просмотра документа через Google Docs Viewer
     """
     try:
-        doc = Document(file_path)
-        html_parts = []
+        # Получаем контент из базы данных
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if not content:
+            raise HTTPException(status_code=404, detail="Документ не найден")
         
-        for paragraph in doc.paragraphs:
-            if not paragraph.text.strip():  # Пропускаем пустые параграфы
-                html_parts.append('<br>')
-                continue
-                
-            # Определяем стиль параграфа
-            style = paragraph.style.name.lower()
-            
-            # Обрабатываем заголовки
-            if 'heading' in style:
-                level = 1
-                if 'heading 1' in style or 'title' in style:
-                    level = 1
-                elif 'heading 2' in style:
-                    level = 2
-                elif 'heading 3' in style:
-                    level = 3
-                elif 'heading 4' in style:
-                    level = 4
-                elif 'heading 5' in style:
-                    level = 5
-                elif 'heading 6' in style:
-                    level = 6
-                
-                html_parts.append(f'<h{level} class="docx-heading">{paragraph.text}</h{level}>')
-                continue
-            
-            # Обрабатываем списки
-            if 'list bullet' in style:
-                html_parts.append(f'<li class="docx-list-item">{paragraph.text}</li>')
-                continue
-            elif 'list number' in style:
-                html_parts.append(f'<li class="docx-list-item">{paragraph.text}</li>')
-                continue
-            
-            # Обрабатываем обычные параграфы
-            paragraph_html = '<p class="docx-paragraph">'
-            
-            for run in paragraph.runs:
-                text = run.text
-                if not text.strip():
-                    continue
-                    
-                # Применяем форматирование
-                if run.bold and run.italic:
-                    text = f'<strong><em>{text}</em></strong>'
-                elif run.bold:
-                    text = f'<strong>{text}</strong>'
-                elif run.italic:
-                    text = f'<em>{text}</em>'
-                
-                # Обрабатываем подчеркивание
-                if run.underline:
-                    text = f'<u>{text}</u>'
-                
-                # Обрабатываем зачеркивание
-                if hasattr(run, 'font') and hasattr(run.font, 'strike') and run.font.strike:
-                    text = f'<del>{text}</del>'
-                
-                paragraph_html += text
-            
-            paragraph_html += '</p>'
-            html_parts.append(paragraph_html)
+        # Получаем расширение файла
+        file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
         
-        # Обрабатываем таблицы
-        for table in doc.tables:
-            table_html = '<table class="docx-table" border="1" cellpadding="5" cellspacing="0">'
+        # Определяем URL для скачивания файла
+        download_url = f"http://localhost:8081/content/download-file/{content_id}"
+        
+        # Поддерживаемые форматы для Google Docs Viewer
+        supported_formats = ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf']
+        
+        if file_extension in supported_formats:
+            # Используем Google Docs Viewer для поддерживаемых форматов
+            google_docs_url = f"https://docs.google.com/viewer?url={download_url}&embedded=true"
             
-            for row in table.rows:
-                table_html += '<tr>'
-                for cell in row.cells:
-                    table_html += f'<td class="docx-cell">{cell.text}</td>'
-                table_html += '</tr>'
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{content.title} - Просмотр документа</title>
+                <style>
+                    body {{
+                        margin: 0;
+                        padding: 0;
+                        font-family: Arial, sans-serif;
+                        background-color: #f5f5f5;
+                    }}
+                    .header {{
+                        background: #f8f9fa;
+                        padding: 15px 20px;
+                        border-bottom: 1px solid #dee2e6;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    }}
+                    .header h1 {{
+                        margin: 0;
+                        font-size: 18px;
+                        color: #333;
+                    }}
+                    .header .controls {{
+                        display: flex;
+                        gap: 10px;
+                    }}
+                    .btn {{
+                        padding: 8px 16px;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        text-decoration: none;
+                        font-size: 14px;
+                    }}
+                    .btn-primary {{
+                        background: #007bff;
+                        color: white;
+                    }}
+                    .btn-secondary {{
+                        background: #6c757d;
+                        color: white;
+                    }}
+                    .google-docs-info {{
+                        background: #fff3cd;
+                        border: 1px solid #ffeaa7;
+                        color: #856404;
+                        padding: 10px;
+                        border-radius: 4px;
+                        margin: 10px 20px;
+                    }}
+                    #viewer {{
+                        width: 100%;
+                        height: calc(100vh - 80px);
+                        border: none;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>{content.title}</h1>
+                    <div class="controls">
+                        <a href="/content/download-file/{content_id}" class="btn btn-primary">Скачать</a>
+                        <a href="javascript:history.back()" class="btn btn-secondary">Назад</a>
+                    </div>
+                </div>
+                <div class="google-docs-info">
+                    <strong>Внимание:</strong> Google Docs Viewer может не работать с файлами на localhost. 
+                    Для корректной работы убедитесь, что файл доступен по публичному URL.
+                </div>
+                <iframe id="viewer" src="{google_docs_url}"></iframe>
+            </body>
+            </html>
+            """
             
-            table_html += '</table>'
-            html_parts.append(table_html)
-        
-        # Группируем списки
-        html_content = '\n'.join(html_parts)
-        
-        # Обрабатываем списки - группируем последовательные элементы списка
-        # Находим все последовательные элементы списка и группируем их
-        lines = html_content.split('\n')
-        result_lines = []
-        i = 0
-        
-        while i < len(lines):
-            line = lines[i].strip()
+            return HTMLResponse(content=html_content)
+        else:
+            # Для неподдерживаемых форматов показываем сообщение
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{content.title} - Неподдерживаемый формат</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background-color: #f5f5f5;
+                    }}
+                    .container {{
+                        max-width: 600px;
+                        margin: 0 auto;
+                        background: white;
+                        padding: 30px;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        text-align: center;
+                    }}
+                    .btn {{
+                        padding: 10px 20px;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        text-decoration: none;
+                        font-size: 14px;
+                        margin: 10px;
+                    }}
+                    .btn-primary {{
+                        background: #007bff;
+                        color: white;
+                    }}
+                    .btn-secondary {{
+                        background: #6c757d;
+                        color: white;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Неподдерживаемый формат файла</h1>
+                    <p>Формат файла <strong>.{file_extension}</strong> не поддерживается для просмотра в браузере.</p>
+                    <p>Вы можете скачать файл для просмотра в соответствующем приложении.</p>
+                    <div>
+                        <a href="/content/download-file/{content_id}" class="btn btn-primary">Скачать файл</a>
+                        <a href="javascript:history.back()" class="btn btn-secondary">Назад</a>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
             
-            # Если это элемент списка
-            if line.startswith('<li class="docx-list-item">'):
-                # Начинаем группу списка
-                result_lines.append('<ul class="docx-list">')
-                
-                # Добавляем текущий элемент
-                result_lines.append(line)
-                
-                # Ищем следующие элементы списка
-                j = i + 1
-                while j < len(lines) and lines[j].strip().startswith('<li class="docx-list-item">'):
-                    result_lines.append(lines[j].strip())
-                    j += 1
-                
-                # Закрываем группу списка
-                result_lines.append('</ul>')
-                i = j
-            else:
-                # Обычная строка
-                result_lines.append(line)
-                i += 1
-        
-        html_content = '\n'.join(result_lines)
-        
-        return html_content
-        
+            return HTMLResponse(content=html_content)
+            
     except Exception as e:
-        # Если не удалось обработать с форматированием, возвращаем простой текст
-        print(f"Ошибка при конвертации с форматированием: {e}")
-        return docx2txt.process(file_path)
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы просмотра: {str(e)}")
 
 # # Эндпоинт для загрузки файлов
 # @router.post("/upload-file")
@@ -487,233 +522,7 @@ async def download_file(content_id: int, db: Session = Depends(get_db)):
     # Возвращаем файл как ответ
     return FileResponse(file_path, media_type='application/octet-stream', filename=os.path.basename(file_path))
 
-@router.get("/view-file/{content_id}")
-async def view_file(content_id: int, db: Session = Depends(get_db)):
-    # Получаем контент из базы данных по ID
-    content = db.query(Content).filter(Content.id == content_id).first()
-    if content is None:
-        raise HTTPException(status_code=404, detail="Контент не найден")
 
-    # Проверяем, существует ли файл
-    file_path = content.file_path
-    if not os.path.exists(file_path):
-        # Если файл не найден по абсолютному пути, проверяем, может быть это старый путь
-        # и нужно добавить префикс /app/files/
-        if not file_path.startswith('/app/files/'):
-            new_path = f"/app/files/{os.path.basename(file_path)}"
-            if os.path.exists(new_path):
-                file_path = new_path
-            else:
-                raise HTTPException(status_code=404, detail="Файл не найден")
-        else:
-            raise HTTPException(status_code=404, detail="Файл не найден")
-
-    # Определяем тип файла на основе расширения
-    file_extension = os.path.splitext(file_path)[1].lower()
-    
-    # Устанавливаем соответствующий media_type в зависимости от расширения файла
-    if file_extension in ['.pdf']:
-        media_type = 'application/pdf'
-    elif file_extension in ['.docx']:
-        media_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    elif file_extension in ['.mp3', '.wav', '.ogg']:
-        media_type = f'audio/{file_extension[1:]}'
-    elif file_extension in ['.mp4', '.webm', '.avi', '.mov']:
-        media_type = f'video/{file_extension[1:]}'
-    elif file_extension in ['.jpg', '.jpeg', '.png', '.gif']:
-        media_type = f'image/{file_extension[1:]}'
-    else:
-        # Для других типов файлов используем общий тип
-        media_type = 'application/octet-stream'
-
-    # Возвращаем файл как ответ с заголовком для открытия в браузере
-    return FileResponse(file_path, media_type=media_type, filename=os.path.basename(file_path), headers={"Content-Disposition": "inline"})
-
-@router.get("/view-word/{content_id}")
-async def view_word_document(content_id: int, db: Session = Depends(get_db)):
-    """
-    Конвертирует Word документ в HTML для просмотра в браузере с сохранением форматирования
-    """
-    # Получаем контент из базы данных по ID
-    content = db.query(Content).filter(Content.id == content_id).first()
-    if content is None:
-        raise HTTPException(status_code=404, detail="Контент не найден")
-
-    # Проверяем, существует ли файл
-    file_path = content.file_path
-    if not os.path.exists(file_path):
-        # Если файл не найден по абсолютному пути, проверяем, может быть это старый путь
-        if not file_path.startswith('/app/files/'):
-            new_path = f"/app/files/{os.path.basename(file_path)}"
-            if os.path.exists(new_path):
-                file_path = new_path
-            else:
-                raise HTTPException(status_code=404, detail="Файл не найден")
-        else:
-            raise HTTPException(status_code=404, detail="Файл не найден")
-
-    # Проверяем, что это Word документ
-    file_extension = os.path.splitext(file_path)[1].lower()
-    if file_extension not in ['.docx']:
-        raise HTTPException(status_code=400, detail="Файл не является Word документом")
-
-    try:
-        # Конвертируем Word документ в HTML с сохранением форматирования
-        formatted_content = convert_docx_to_html_with_formatting(file_path)
-        
-        # Создаем HTML страницу для просмотра
-        html_content = f"""
-        <!DOCTYPE html>
-        <html lang="ru">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{content.title}</title>
-            <style>
-                body {{
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    line-height: 1.6;
-                    margin: 0;
-                    padding: 20px;
-                    background-color: #f8f9fa;
-                }}
-                .container {{
-                    max-width: 900px;
-                    margin: 0 auto;
-                    background-color: white;
-                    padding: 30px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }}
-                .header {{
-                    border-bottom: 2px solid #e9ecef;
-                    padding-bottom: 20px;
-                    margin-bottom: 30px;
-                }}
-                .title {{
-                    color: #2c3e50;
-                    margin: 0 0 10px 0;
-                    font-size: 24px;
-                }}
-                .description {{
-                    color: #6c757d;
-                    margin: 0;
-                    font-style: italic;
-                }}
-                .content {{
-                    font-size: 16px;
-                    color: #333;
-                    line-height: 1.8;
-                }}
-                .docx-heading {{
-                    color: #2c3e50;
-                    margin-top: 20px;
-                    margin-bottom: 10px;
-                    font-weight: 600;
-                }}
-                .docx-paragraph {{
-                    margin-bottom: 12px;
-                    text-align: justify;
-                }}
-                .docx-table {{
-                    width: 100%;
-                    margin: 15px 0;
-                    border-collapse: collapse;
-                    border: 1px solid #ddd;
-                }}
-                .docx-cell {{
-                    padding: 8px;
-                    border: 1px solid #ddd;
-                    vertical-align: top;
-                }}
-                .back-button {{
-                    display: inline-block;
-                    margin-bottom: 20px;
-                    padding: 10px 20px;
-                    background-color: #007bff;
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 5px;
-                    transition: background-color 0.3s;
-                }}
-                .back-button:hover {{
-                    background-color: #0056b3;
-                    color: white;
-                    text-decoration: none;
-                }}
-                strong {{
-                    font-weight: 600;
-                }}
-                em {{
-                    font-style: italic;
-                }}
-                u {{
-                    text-decoration: underline;
-                }}
-                del {{
-                    text-decoration: line-through;
-                    color: #6c757d;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <a href="javascript:history.back()" class="back-button">← Назад</a>
-                <div class="header">
-                    <h1 class="title">{content.title}</h1>
-                    <p class="description">{content.description}</p>
-                </div>
-                <div class="content">{formatted_content}</div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        return HTMLResponse(content=html_content)
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при обработке Word документа: {str(e)}")
-
-@router.get("/word-content/{content_id}")
-async def get_word_content(content_id: int, db: Session = Depends(get_db)):
-    """
-    Возвращает содержимое Word документа в формате JSON с сохранением форматирования
-    """
-    # Получаем контент из базы данных по ID
-    content = db.query(Content).filter(Content.id == content_id).first()
-    if content is None:
-        raise HTTPException(status_code=404, detail="Контент не найден")
-
-    # Проверяем, существует ли файл
-    file_path = content.file_path
-    if not os.path.exists(file_path):
-        # Если файл не найден по абсолютному пути, проверяем, может быть это старый путь
-        if not file_path.startswith('/app/files/'):
-            new_path = f"/app/files/{os.path.basename(file_path)}"
-            if os.path.exists(new_path):
-                file_path = new_path
-            else:
-                raise HTTPException(status_code=404, detail="Файл не найден")
-        else:
-            raise HTTPException(status_code=404, detail="Файл не найден")
-
-    # Проверяем, что это Word документ
-    file_extension = os.path.splitext(file_path)[1].lower()
-    if file_extension not in ['.docx']:
-        raise HTTPException(status_code=400, detail="Файл не является Word документом")
-
-    try:
-        # Конвертируем Word документ в HTML с сохранением форматирования
-        formatted_content = convert_docx_to_html_with_formatting(file_path)
-        
-        return {
-            "title": content.title,
-            "description": content.description,
-            "content": formatted_content
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при обработке Word документа: {str(e)}")
 
 @router.get("/user/{user_id}/content/by-tags/{tag_id}")
 async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Session = Depends(get_db)):
@@ -829,203 +638,3 @@ async def delete_tag(tag_id: int, db: Session = Depends(get_db)):
         return {"message": "Тег успешно удален"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при удалении тега: {str(e)}") 
-
-# OnlyOffice маршруты
-@router.get("/onlyoffice/{content_id}")
-async def get_onlyoffice_config(
-    content_id: int, 
-    user_id: int = 1,
-    user_name: str = "Пользователь",
-    mode: str = "view",
-    db: Session = Depends(get_db)
-):
-    """Получает конфигурацию OnlyOffice для документа"""
-    try:
-        content = db.query(Content).filter(Content.id == content_id).first()
-        if not content:
-            raise HTTPException(status_code=404, detail="Документ не найден")
-        
-        # Проверяем, поддерживается ли тип файла
-        file_ext = content.file_path.lower().split('.')[-1]
-        supported_extensions = ['doc', 'docx', 'odt', 'rtf', 'txt', 'pdf', 'xls', 'xlsx', 'ods', 'ppt', 'pptx', 'odp']
-        
-        if file_ext not in supported_extensions:
-            raise HTTPException(status_code=400, detail="Тип файла не поддерживается OnlyOffice")
-        
-        # Создаем конфигурацию для OnlyOffice
-        config = onlyoffice_service.create_document_config(
-            file_path=content.file_path,
-            file_name=content.title,
-            file_id=str(content_id),
-            user_id=user_id,
-            user_name=user_name,
-            mode=mode
-        )
-        
-        return {
-            "config": config,
-            "editor_url": onlyoffice_service.get_editor_url(config),
-            "document_info": {
-                "id": content.id,
-                "title": content.title,
-                "description": content.description,
-                "file_path": content.file_path
-            }
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при создании конфигурации OnlyOffice: {str(e)}")
-
-@router.post("/save-onlyoffice/{content_id}")
-async def save_onlyoffice_document(
-    content_id: int,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Сохраняет документ из OnlyOffice"""
-    try:
-        # Получаем данные из запроса
-        body = await request.json()
-        
-        # Получаем токен из заголовка
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            raise HTTPException(status_code=401, detail="Отсутствует токен авторизации")
-        
-        token = auth_header.replace("Bearer ", "")
-        
-        # Проверяем подлинность callback
-        if not onlyoffice_service.verify_callback(token, body):
-            raise HTTPException(status_code=401, detail="Недействительный токен")
-        
-        # Получаем контент из базы данных
-        content = db.query(Content).filter(Content.id == content_id).first()
-        if not content:
-            raise HTTPException(status_code=404, detail="Документ не найден")
-        
-        # Проверяем статус
-        status = body.get('status')
-        if status == 2:  # Документ готов к сохранению
-            # Получаем URL для скачивания обновленного файла
-            download_url = body.get('url')
-            if download_url:
-                # Скачиваем обновленный файл
-                response = requests.get(download_url)
-                if response.status_code == 200:
-                    # Сохраняем файл
-                    with open(content.file_path, 'wb') as f:
-                        f.write(response.content)
-                    
-                    return {"status": "success", "message": "Документ успешно сохранен"}
-                else:
-                    raise HTTPException(status_code=500, detail="Ошибка при скачивании обновленного файла")
-            else:
-                raise HTTPException(status_code=400, detail="URL для скачивания не предоставлен")
-        elif status == 1:  # Документ редактируется
-            return {"status": "editing", "message": "Документ редактируется"}
-        elif status == 3:  # Ошибка при сохранении
-            raise HTTPException(status_code=500, detail="Ошибка при сохранении документа")
-        else:
-            return {"status": "unknown", "message": f"Неизвестный статус: {status}"}
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при сохранении документа: {str(e)}")
-
-@router.get("/onlyoffice-editor/{content_id}")
-async def get_onlyoffice_editor_page(
-    content_id: int,
-    user_id: int = 1,
-    user_name: str = "Пользователь",
-    mode: str = "view",
-    db: Session = Depends(get_db)
-):
-    """Возвращает HTML страницу с встроенным OnlyOffice редактором"""
-    try:
-        content = db.query(Content).filter(Content.id == content_id).first()
-        if not content:
-            raise HTTPException(status_code=404, detail="Документ не найден")
-        
-        # Создаем конфигурацию для OnlyOffice
-        config = onlyoffice_service.create_document_config(
-            file_path=content.file_path,
-            file_name=content.title,
-            file_id=str(content_id),
-            user_id=user_id,
-            user_name=user_name,
-            mode=mode
-        )
-        
-        # Создаем HTML страницу
-        html_content = f"""
-        <!DOCTYPE html>
-        <html lang="ru">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{content.title} - OnlyOffice</title>
-            <style>
-                body {{
-                    margin: 0;
-                    padding: 0;
-                    font-family: Arial, sans-serif;
-                }}
-                #placeholder {{
-                    width: 100%;
-                    height: 100vh;
-                }}
-                .header {{
-                    background: #f8f9fa;
-                    padding: 10px 20px;
-                    border-bottom: 1px solid #dee2e6;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }}
-                .header h1 {{
-                    margin: 0;
-                    font-size: 18px;
-                    color: #333;
-                }}
-                .header .controls {{
-                    display: flex;
-                    gap: 10px;
-                }}
-                .btn {{
-                    padding: 8px 16px;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    text-decoration: none;
-                    font-size: 14px;
-                }}
-                .btn-primary {{
-                    background: #007bff;
-                    color: white;
-                }}
-                .btn-secondary {{
-                    background: #6c757d;
-                    color: white;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>{content.title}</h1>
-                <div class="controls">
-                    <a href="/content/download-file/{content_id}" class="btn btn-primary">Скачать</a>
-                    <a href="javascript:history.back()" class="btn btn-secondary">Назад</a>
-                </div>
-            </div>
-            <div id="placeholder"></div>
-            
-            <script type="text/javascript" src="http://localhost:8082/web-apps/apps/api/documents/api.js"></script>
-            <script type="text/javascript">
-                {onlyoffice_service.create_editor_config(config)}
-            </script>
-        </body>
-        </html>
-        """
-        
-        return HTMLResponse(content=html_content)
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы редактора: {str(e)}")
