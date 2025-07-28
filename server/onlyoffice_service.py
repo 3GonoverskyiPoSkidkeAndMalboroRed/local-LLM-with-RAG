@@ -42,11 +42,11 @@ class OnlyOfficeService:
         # Генерируем уникальный ключ для документа
         document_key = hashlib.md5(f"{file_id}_{user_id}".encode()).hexdigest()
         
-        # Создаем URL для загрузки файла (через nginx для доступа из OnlyOffice)
-        download_url = f"{self.external_url}/content/download-file/{file_id}"
+        # Создаем URL для загрузки файла (используем публичный URL)
+        download_url = f"http://localhost:8081/content/download-file/{file_id}"
         
-        # Создаем URL для сохранения файла
-        save_url = f"{self.external_url}/content/save-onlyoffice/{file_id}"
+        # Создаем URL для сохранения файла (используем публичный URL)
+        save_url = f"http://localhost:8081/content/save-onlyoffice/{file_id}"
         
         config = {
             "document": {
