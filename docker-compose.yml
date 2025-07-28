@@ -31,8 +31,6 @@ services:
       - DATABASE_URL=mysql+mysqlconnector://root:${MYSQL_ROOT_PASSWORD:-123123}@db:3306/${MYSQL_DATABASE:-db}
       - DEBUG=${DEBUG:-False}
       - OLLAMA_HOST=http://ollama:11434
-      - ONLYOFFICE_JWT_SECRET=${ONLYOFFICE_JWT_SECRET:-your-secret-key-here}
-      - ONLYOFFICE_URL=http://onlyoffice:80
       - API_URL=http://backend:8000
       - EXTERNAL_URL=http://nginx:80
     depends_on:
@@ -133,34 +131,11 @@ services:
     networks:
       - app-network
 
-  onlyoffice:
-    image: onlyoffice/documentserver:latest
-    ports:
-      - "8082:80"
-      - "8443:443"
-    environment:
-      - JWT_ENABLED=true
-      - JWT_SECRET=${ONLYOFFICE_JWT_SECRET:-your-secret-key-here}
-      - JWT_HEADER=Authorization
-      - JWT_IN_BODY=false
-      - WOPI_ENABLED=true
-      - STORAGE_PATH=/var/www/onlyoffice/Data
-    volumes:
-      - onlyoffice_data:/var/www/onlyoffice/Data
-      - onlyoffice_logs:/var/log/onlyoffice
-      - files_storage:/var/www/onlyoffice/Data/cache/files
-    networks:
-      - app-network
-    depends_on:
-      - backend
-
 volumes:
   db_data:
   rabbitmq_data:
   files_storage:
   ollama_data:
-  onlyoffice_data:
-  onlyoffice_logs:
 
 networks:
   app-network:

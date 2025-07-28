@@ -50,10 +50,10 @@
               <td class="align-middle text-center">
                 <div class="d-flex justify-content-center">
                   <button
-                    v-if="isFileSupported(content.file_path)"
-                    @click="openOnlyOffice(content)"
+                    v-if="isDocumentFormat(getFileExtension(content.file_path))"
+                    @click="viewDocument(content)"
                     class="btn btn-sm btn-outline-primary me-2"
-                    title="Открыть в OnlyOffice"
+                    title="Просмотреть документ"
                   >
                     <i class="fas fa-eye me-1"></i>Просмотр
                   </button>
@@ -86,39 +86,18 @@
       </div>
     </div>
     </div>
-    
-    <!-- OnlyOffice Viewer Modal -->
-    <OnlyOfficeViewer
-      ref="onlyofficeViewer"
-      :document-id="selectedDocument.id"
-      :document-title="selectedDocument.title"
-      :document-description="selectedDocument.description"
-      :user-id="currentUserId"
-      :user-name="currentUserName"
-    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
-import OnlyOfficeViewer from '../../components/OnlyOfficeViewer.vue';
 
 export default {
   name: "ContentTable",
-  components: {
-    OnlyOfficeViewer
-  },
   data() {
     return {
       contents: [],
       isAdmin: false,
-      selectedDocument: {
-        id: null,
-        title: '',
-        description: ''
-      },
-      currentUserId: 1,
-      currentUserName: 'Пользователь',
       departments: {
         1: "Клиенты",
         2: "Сервисная служба",
@@ -199,31 +178,20 @@ export default {
       }
     },
     
-    // Проверка поддержки файла OnlyOffice
-    isFileSupported(filePath) {
-      const supportedExtensions = ['doc', 'docx', 'odt', 'rtf', 'txt', 'pdf', 'xls', 'xlsx', 'ods', 'ppt', 'pptx', 'odp'];
-      const extension = filePath.toLowerCase().split('.').pop();
-      return supportedExtensions.includes(extension);
+    // Получение расширения файла
+    getFileExtension(filePath) {
+      return filePath.toLowerCase().split('.').pop();
     },
     
-    // Открытие документа в OnlyOffice
-    openOnlyOffice(content) {
-      this.selectedDocument = {
-        id: content.id,
-        title: content.title,
-        description: content.description
-      };
-      
-      // Получаем информацию о текущем пользователе
-      const userId = localStorage.getItem("userId");
-      if (userId) {
-        this.currentUserId = parseInt(userId);
-      }
-      
-      // Открываем OnlyOffice viewer
-      this.$nextTick(() => {
-        this.$refs.onlyofficeViewer.show();
-      });
+    // Проверка, является ли файл документом для просмотра
+    isDocumentFormat(extension) {
+      return ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf'].includes(extension);
+    },
+    
+    // Просмотр документа через Google Docs Viewer
+    viewDocument(content) {
+      const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer/${content.id}`;
+      window.open(viewerUrl, '_blank');
     }
   }
 };
