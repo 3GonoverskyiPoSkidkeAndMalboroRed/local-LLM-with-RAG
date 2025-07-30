@@ -66,25 +66,15 @@
       </div>
     </div>
     
-    <!-- Компонент для просмотра Word документов -->
-    <WordViewer 
-      ref="wordViewer"
-      :documentId="selectedDocumentId"
-      :documentTitle="selectedDocumentTitle"
-      :documentDescription="selectedDocumentDescription"
-    />
+
   </div>
 </template>
 
 <script>
 import axiosInstance from '@/utils/axiosConfig';
-import WordViewer from '@/components/WordViewer.vue';
 
 export default {
   name: "LibraryPage",
-  components: {
-    WordViewer
-  },
   data() {
     return {
       userId: localStorage.getItem("userId"),
@@ -95,10 +85,7 @@ export default {
       loading: true,
       error: null,
       searchQuery: "",
-      documents: [],
-      selectedDocumentId: null,
-      selectedDocumentTitle: '',
-      selectedDocumentDescription: ''
+      documents: []
     };
   },
   async created() {
@@ -112,7 +99,7 @@ export default {
     async fetchContentByTags() {
       try {
         this.loading = true;
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/user/${this.userId}/content/by-tags`);
+        const response = await axiosInstance.get(`/user/${this.userId}/content/by-tags`);
         this.contentData = response.data;
         this.loading = false;
       } catch (error) {
@@ -144,21 +131,9 @@ export default {
       });
     },
     viewDocument(doc) {
-      // Определяем тип файла по расширению
-      const fileExtension = doc.file_path.split('.').pop().toLowerCase();
-      
-      if (fileExtension === 'docx') {
-        // Для Word документов используем модальное окно
-        this.selectedDocumentId = doc.id;
-        this.selectedDocumentTitle = doc.title;
-        this.selectedDocumentDescription = doc.description;
-        this.$nextTick(() => {
-          this.$refs.wordViewer.show();
-        });
-      } else {
-        // Для других файлов используем стандартный маршрут
-        window.open(`${axiosInstance.defaults.baseURL}/content/view-file/${doc.id}`, '_blank');
-      }
+      // Используем Google Docs Viewer для всех поддерживаемых форматов
+      const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
+      window.open(viewerUrl, '_blank');
     },
     downloadDocument(doc) {
       // Скачиваем документ
