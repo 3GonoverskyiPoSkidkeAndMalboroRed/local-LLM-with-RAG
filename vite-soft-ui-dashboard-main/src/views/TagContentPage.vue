@@ -134,26 +134,16 @@
       </div>
     </div>
     
-    <!-- Компонент для просмотра Word документов -->
-    <WordViewer 
-      ref="wordViewer"
-      :documentId="selectedDocumentId"
-      :documentTitle="selectedDocumentTitle"
-      :documentDescription="selectedDocumentDescription"
-    />
+
   </div>
 </template>
 
 <script>
 import axiosInstance from '@/utils/axiosConfig';
 import { Modal, Toast } from 'bootstrap';
-import WordViewer from '@/components/WordViewer.vue';
 
 export default {
   name: "TagContentPage",
-  components: {
-    WordViewer
-  },
   data() {
     return {
       userId: localStorage.getItem("userId"),
@@ -169,10 +159,7 @@ export default {
       isAudioFile: false,
       isVideoFile: false,
       copyToast: null,
-      searchQuery: "", // Поле для хранения поискового запроса
-      selectedDocumentId: null,
-      selectedDocumentTitle: '',
-      selectedDocumentDescription: ''
+      searchQuery: "" // Поле для хранения поискового запроса
     };
   },
   async created() {
@@ -259,7 +246,7 @@ export default {
       // Проверяем, является ли файл аудио или видео
       if (this.isAudio(fileExtension) || this.isVideo(fileExtension)) {
         // Настраиваем модальное окно для медиа файла
-        this.currentMediaUrl = `${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`;
+        this.currentMediaUrl = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
         this.currentMediaTitle = doc.title || this.getFileName(doc.file_path);
         
         // Устанавливаем тип медиа
@@ -275,17 +262,10 @@ export default {
         
         // Открываем модальное окно
         this.mediaPlayerModal.show();
-      } else if (fileExtension === 'docx') {
-        // Для Word документов используем модальное окно
-        this.selectedDocumentId = doc.id;
-        this.selectedDocumentTitle = doc.title;
-        this.selectedDocumentDescription = doc.description;
-        this.$nextTick(() => {
-          this.$refs.wordViewer.show();
-        });
       } else {
-        // Для других типов файлов открываем в новой вкладке
-        window.open(`${axiosInstance.defaults.baseURL}/content/view-file/${doc.id}`, '_blank');
+        // Для всех остальных файлов используем Google Docs Viewer
+        const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
+        window.open(viewerUrl, '_blank');
       }
     },
     async downloadDocument(doc) {
@@ -298,7 +278,7 @@ export default {
     },
     copyLink(docId, action) {
       const url = action === 'view' 
-        ? `${axiosInstance.defaults.baseURL}/content/view-file/${docId}` 
+        ? `${axiosInstance.defaults.baseURL}/content/document-viewer/${docId}` 
         : `${axiosInstance.defaults.baseURL}/content/download-file/${docId}`;
       
       if (navigator.clipboard) {
