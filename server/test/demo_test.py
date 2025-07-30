@@ -12,7 +12,7 @@ from datetime import datetime
 
 # Конфигурация для демо
 DEMO_CONFIG = {
-    "base_url": "http://localhost:8081/api",
+    "base_url": "https://77.222.42.53/api",
     "department_id": "5",
     "concurrent_users": 5,  # Минимальная нагрузка для демо
     "test_duration_seconds": 30,  # Короткий тест

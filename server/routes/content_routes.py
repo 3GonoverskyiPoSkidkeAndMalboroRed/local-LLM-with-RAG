@@ -27,7 +27,7 @@ async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db
         file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
         
         # Определяем URL для скачивания файла
-        download_url = f"http://localhost:8081/content/download-file/{content_id}"
+        download_url = f"https://77.222.42.53/content/download-file/{content_id}"
         
         # Поддерживаемые форматы для Google Docs Viewer
         supported_formats = ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf']
@@ -107,7 +107,7 @@ async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db
                     </div>
                 </div>
                 <div class="google-docs-info">
-                    <strong>Внимание:</strong> Google Docs Viewer может не работать с файлами на localhost. 
+                    <strong>Внимание:</strong> Google Docs Viewer может не работать с файлами на локальном сервере. 
                     Для корректной работы убедитесь, что файл доступен по публичному URL.
                 </div>
                 <iframe id="viewer" src="{google_docs_url}"></iframe>

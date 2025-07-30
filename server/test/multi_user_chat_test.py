@@ -12,7 +12,7 @@ import os
 
 # Конфигурация по умолчанию
 DEFAULT_CONFIG = {
-    "base_url": "http://localhost:8081/api",
+    "base_url": "https://77.222.42.53/api",
     "concurrent_users": 50,
     "department_id": "5",
     "test_duration_minutes": 5,
@@ -416,7 +416,7 @@ async def main():
     parser = argparse.ArgumentParser(description="Многопользовательский тест чата RAG")
     parser.add_argument("--users", type=int, default=50, help="Количество одновременных пользователей")
     parser.add_argument("--duration", type=int, default=5, help="Длительность теста в минутах")
-    parser.add_argument("--url", type=str, default="http://localhost:8081/api", help="URL API")
+    parser.add_argument("--url", type=str, default="https://77.222.42.53/api", help="URL API")
     parser.add_argument("--department", type=str, default="5", help="ID отдела")
     parser.add_argument("--no-chat-history", action="store_true", help="Отключить историю чата")
     parser.add_argument("--no-feedback", action="store_true", help="Отключить отправку отзывов")

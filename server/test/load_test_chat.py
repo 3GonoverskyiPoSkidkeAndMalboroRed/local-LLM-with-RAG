@@ -6,7 +6,7 @@ from datetime import datetime
 import random
 
 # Конфигурация
-BASE_URL = "http://localhost:8081/api"  # Замените на ваш URL
+BASE_URL = "https://77.222.42.53/api"  # Замените на ваш URL
 CONCURRENT_USERS = 100
 DEPARTMENT_ID = "5"  # Или другой инициализированный отдел
 

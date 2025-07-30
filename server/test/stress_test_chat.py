@@ -15,7 +15,7 @@ from collections import defaultdict, deque
 
 # Конфигурация по умолчанию для стресс-теста
 DEFAULT_STRESS_CONFIG = {
-    "base_url": "http://localhost:8081/api",
+    "base_url": "https://77.222.42.53/api",
     "concurrent_users": 100,
     "department_id": "5",
     "test_duration_minutes": 10,
@@ -458,7 +458,7 @@ async def main():
     parser.add_argument("--duration", type=int, default=10, help="Длительность теста в минутах")
     parser.add_argument("--ramp-up", type=int, default=2, help="Время нарастания нагрузки в минутах")
     parser.add_argument("--ramp-down", type=int, default=2, help="Время снижения нагрузки в минутах")
-    parser.add_argument("--url", type=str, default="http://localhost:8081/api", help="URL API")
+    parser.add_argument("--url", type=str, default="https://77.222.42.53/api", help="URL API")
     parser.add_argument("--department", type=str, default="5", help="ID отдела")
     parser.add_argument("--no-monitoring", action="store_true", help="Отключить мониторинг")
     parser.add_argument("--no-gradual-load", action="store_true", help="Отключить постепенное нарастание нагрузки")

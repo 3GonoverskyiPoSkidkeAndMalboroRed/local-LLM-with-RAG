@@ -131,7 +131,7 @@ async def run_detailed_test(config: Dict[str, Any], logger: TestLogger):
     
     print(f"🔍 Запуск детального теста...")
     
-    base_url = config.get("base_url", "http://localhost:8081/api")
+    base_url = config.get("base_url", "https://77.222.42.53/api")
     department_id = config.get("department_id", "5")
     num_requests = config.get("num_requests", 5)
     
@@ -243,7 +243,7 @@ async def run_quick_test(config: Dict[str, Any], logger: TestLogger):
     
     logger.log("⚡ Быстрый тест работоспособности...")
     
-    base_url = config.get("base_url", "http://localhost:8081/api")
+    base_url = config.get("base_url", "https://77.222.42.53/api")
     department_id = config.get("department_id", "5")
     
     async with aiohttp.ClientSession() as session:
@@ -346,7 +346,7 @@ async def main():
                        help="Тип теста для запуска")
     parser.add_argument("--users", type=int, default=50, help="Количество пользователей")
     parser.add_argument("--duration", type=int, default=5, help="Длительность теста в минутах")
-    parser.add_argument("--url", type=str, default="http://localhost:8081/api", help="URL API")
+    parser.add_argument("--url", type=str, default="https://77.222.42.53/api", help="URL API")
     parser.add_argument("--department", type=str, default="5", help="ID отдела")
     parser.add_argument("--ramp-up", type=int, default=2, help="Время нарастания нагрузки (только для stress)")
     parser.add_argument("--ramp-down", type=int, default=2, help="Время снижения нагрузки (только для stress)")

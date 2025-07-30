@@ -71,7 +71,7 @@ python run_tests.py quick
 |----------|----------|--------------|
 | `--users` | Количество одновременных пользователей | 50 |
 | `--duration` | Длительность теста в минутах | 5 |
-| `--url` | URL API сервера | http://localhost:8081/api |
+| `--url` | URL API сервера | https://77.222.42.53/api |
 | `--department` | ID отдела для тестирования | 5 |
 | `--ramp-up` | Время нарастания нагрузки (stress) | 2 |
 | `--ramp-down` | Время снижения нагрузки (stress) | 2 |
@@ -177,16 +177,16 @@ python load_test_chat.py
 #### 1. "API недоступен"
 ```bash
 # Проверьте, что сервер запущен
-curl http://localhost:8081/api/llm/models
+curl https://77.222.42.53/api/llm/models
 
 # Проверьте порт и URL
-python run_tests.py quick --url http://localhost:8081/api
+python run_tests.py quick --url https://77.222.42.53/api
 ```
 
 #### 2. "Отдел не инициализирован"
 ```bash
 # Инициализируйте отдел через API
-curl -X POST http://localhost:8081/api/llm/initialize \
+curl -X POST https://77.222.42.53/api/llm/initialize \
   -H "Content-Type: application/json" \
   -d '{
     "model_name": "gemma3",
@@ -217,12 +217,12 @@ logging.basicConfig(level=logging.DEBUG)
 
 #### Проверка состояния очереди
 ```bash
-curl http://localhost:8081/api/llm/queue/status/5
+curl https://77.222.42.53/api/llm/queue/status/5
 ```
 
 #### Очистка зависших задач
 ```bash
-curl -X POST http://localhost:8081/api/llm/queue/force-cleanup/5
+curl -X POST https://77.222.42.53/api/llm/queue/force-cleanup/5
 ```
 
 ## 📈 Рекомендации по тестированию

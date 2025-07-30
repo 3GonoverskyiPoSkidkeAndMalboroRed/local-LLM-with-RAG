@@ -3,7 +3,7 @@ from database import Base
 from models_db import Feedback
 
 # Настройки подключения к базе данных
-DATABASE_URL = "mysql+mysqlconnector://root:123123@localhost:3306/db"
+DATABASE_URL = "mysql+mysqlconnector://root:123123@77.222.42.53:3306/db"
 
 def migrate():
     """Создание таблиц для функционала тестирования и анкетирования"""

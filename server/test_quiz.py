@@ -2,7 +2,7 @@ import requests
 import json
 
 # Базовый URL API
-BASE_URL = "http://localhost:8000"
+BASE_URL = "https://77.222.42.53"
 
 def test_create_quiz():
     """Тестирование создания нового теста"""
