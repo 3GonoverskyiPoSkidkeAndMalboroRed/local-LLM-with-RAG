@@ -1,4 +1,4 @@
-# ВЕРСИЯ 0.0.1
+# ВЕРСИЯ 0.0.1 - УРЕЗАННАЯ БЕЗ OLLAMA
 version: '3.8'
 
 services:
@@ -30,7 +30,6 @@ services:
     environment:
       - DATABASE_URL=mysql+mysqlconnector://root:${MYSQL_ROOT_PASSWORD:-123123}@db:3306/${MYSQL_DATABASE:-db}
       - DEBUG=${DEBUG:-False}
-      - OLLAMA_HOST=http://ollama:11434
       - API_URL=http://backend:8000
       - EXTERNAL_URL=http://nginx:80
     depends_on:
@@ -57,19 +56,6 @@ services:
     networks:
       - app-network
 
-  # backup:
-  #   image: mysql:8.0
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123123}
-  #   volumes:
-  #     - db_data:/var/lib/mysql
-  #     - ./backup:/backup
-  #   depends_on:
-  #     - db
-  #   command: ["sh", "-c", "mysqldump -h db -u root -p${MYSQL_ROOT_PASSWORD:-123123} ${MYSQL_DATABASE:-db} > /backup/backup_file.sql"]
-  #   networks:
-  #     - app-network
-
   nginx:
     image: nginx:latest
     ports:
@@ -81,42 +67,6 @@ services:
       - frontend
     networks:
       - app-network
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    environment:
-      # КОНСЕРВАТИВНЫЕ настройки для стабильности
-      - OLLAMA_NUM_PARALLEL=1  # Только 1 параллельный запрос
-      - OLLAMA_MAX_LOADED_MODELS=1  # Только 1 модель в памяти
-      - OLLAMA_FLASH_ATTENTION=false  # Отключаем для стабильности
-      - OLLAMA_KV_CACHE_TYPE=q4_0  # Экономия VRAM
-      - OLLAMA_MAX_QUEUE=5  # Уменьшаем очередь
-      - CUDA_VISIBLE_DEVICES=0
-      - OLLAMA_SCHEDULE_TIMEOUT=120s  # Увеличиваем таймаут
-      - OLLAMA_KEEP_ALIVE=5m  # Держим модель в памяти 5 минут
-      - OLLAMA_GPU_LAYERS=35  # Ограничиваем GPU слои
-    deploy:
-      resources:
-        limits:
-          memory: 8G  # Ограничиваем память
-        reservations:
-          memory: 4G
-          devices:
-            - driver: nvidia
-              count: 1  # Только 1 GPU
-              capabilities: [gpu]
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - app-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -135,7 +85,6 @@ volumes:
   db_data:
   rabbitmq_data:
   files_storage:
-  ollama_data:
 
 networks:
   app-network:
