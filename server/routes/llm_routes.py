@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from langchain_ollama import ChatOllama
 import traceback
 import time
@@ -30,6 +30,15 @@ _get_request_counts = defaultdict(list)  # task_id -> [timestamps]
 MAX_GET_REQUESTS_PER_MINUTE = 30  # Максимум 30 GET запросов в минуту к одной задаче
 
 # Модели данных
+class SourceInfo(BaseModel):
+    """Информация об источнике документа"""
+    file_name: str
+    file_path: str
+    chunk_content: str
+    chunk_id: str
+    page_number: Optional[int] = None
+    similarity_score: Optional[float] = None
+
 class QueryRequest(BaseModel):
     question: str
     department_id: str = "default"
@@ -45,6 +54,7 @@ class QueryResultResponse(BaseModel):
     answer: str = ""
     chunks: List[str] = []
     files: List[str] = []
+    sources: List[SourceInfo] = []  # Детальная информация об источниках
     error: str = ""
     created_at: str = ""
     started_at: str = ""
@@ -77,7 +87,8 @@ class QueueStatusResponse(BaseModel):
 async def async_vec_search(embedding_model, query, db, n_top_cos: int = 10):
     """Асинхронная обертка для vec_search"""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, vec_search, embedding_model, query, db, n_top_cos)
+    result = await loop.run_in_executor(None, vec_search, embedding_model, query, db, n_top_cos)
+    return result
 
 # Функция для обработки задачи в фоне
 async def process_query_task(task_id: str):
@@ -124,7 +135,7 @@ async def process_query_task(task_id: str):
             
             print(f"Задача {task_id}: Выполняем векторный поиск...")
             # Выполняем векторный поиск фрагментов асинхронно с тайм-аутом
-            top_chunks, top_files = await asyncio.wait_for(
+            search_result = await asyncio.wait_for(
                 async_vec_search(
                     embedding_model, 
                     user_question, 
@@ -133,6 +144,13 @@ async def process_query_task(task_id: str):
                 ),
                 timeout=EMBEDDING_REQUEST_TIMEOUT
             )
+            
+            # Распаковываем результат поиска
+            if len(search_result) >= 3:
+                top_chunks, top_files, detailed_results = search_result
+            else:
+                top_chunks, top_files = search_result
+                detailed_results = []
             
             print(f"Задача {task_id}: Векторный поиск выполнен за {time.time() - start_time:.2f} секунд")
             
@@ -143,6 +161,41 @@ async def process_query_task(task_id: str):
                 print(f"Задача {task_id}: Векторный поиск не вернул результатов")
                 top_chunks = ["Не найдено релевантных фрагментов для вашего запроса."]
                 top_files = []
+            
+            # Создаем детальную информацию об источниках
+            sources_info = []
+            
+            # Используем детальные результаты, если они доступны
+            if detailed_results:
+                for i, result in enumerate(detailed_results):
+                    file_path = result['file_path']
+                    file_name = file_path.split('/')[-1] if '/' in file_path else file_path
+                    
+                    source_info = SourceInfo(
+                        file_name=file_name,
+                        file_path=file_path,
+                        chunk_content=result['chunk_content'],
+                        chunk_id=f"chunk_{task_id}_{i}",
+                        page_number=result['metadata'].get('page', None),
+                        similarity_score=result['metadata'].get('score', None)
+                    )
+                    sources_info.append(source_info)
+            else:
+                # Fallback к старому методу
+                for i, chunk in enumerate(top_chunks):
+                    if i < len(top_files):
+                        file_path = top_files[i]
+                        file_name = file_path.split('/')[-1] if '/' in file_path else file_path
+                        
+                        source_info = SourceInfo(
+                            file_name=file_name,
+                            file_path=file_path,
+                            chunk_content=chunk,
+                            chunk_id=f"chunk_{task_id}_{i}",
+                            page_number=None,
+                            similarity_score=None
+                        )
+                        sources_info.append(source_info)
             
             # Получаем асинхронный экземпляр чата
             async_chat_instance = llm_state_manager.get_department_async_chat(department_id)
@@ -170,14 +223,16 @@ async def process_query_task(task_id: str):
                 result = {
                     "answer": chat_result.get("answer", "Не удалось получить ответ от модели"),
                     "chunks": top_chunks,
-                    "files": top_files
+                    "files": top_files,
+                    "sources": sources_info
                 }
             else:
                 # Объединяем результаты векторного поиска и LLM
                 result = {
                     "answer": chat_result.get("answer", ""),
                     "chunks": chat_result.get("chunks", top_chunks),
-                    "files": chat_result.get("files", top_files)
+                    "files": chat_result.get("files", top_files),
+                    "sources": sources_info
                 }
             
             total_time = time.time() - start_time
@@ -509,6 +564,7 @@ async def get_query_result(task_id: str):
         response.answer = task.result.get("answer", "")
         response.chunks = task.result.get("chunks", [])
         response.files = task.result.get("files", [])
+        response.sources = task.result.get("sources", [])
     
     if task.error:
         response.error = task.error
@@ -672,3 +728,24 @@ async def get_initialized_departments():
     """
     departments = llm_state_manager.get_initialized_departments()
     return {"departments": departments}
+
+@router.get("/source/{task_id}/{chunk_id}")
+async def get_source_details(task_id: str, chunk_id: str):
+    """
+    Получает детальную информацию об источнике по ID задачи и ID чанка.
+    """
+    task = llm_state_manager.get_task_by_id(task_id)
+    
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Задача с ID {task_id} не найдена")
+    
+    if not task.result or "sources" not in task.result:
+        raise HTTPException(status_code=404, detail="Информация об источниках не найдена")
+    
+    sources = task.result.get("sources", [])
+    source = next((s for s in sources if hasattr(s, 'chunk_id') and s.chunk_id == chunk_id), None)
+    
+    if not source:
+        raise HTTPException(status_code=404, detail=f"Источник с ID {chunk_id} не найден")
+    
+    return source

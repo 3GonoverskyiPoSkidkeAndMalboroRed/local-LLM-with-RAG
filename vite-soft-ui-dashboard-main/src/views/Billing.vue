@@ -37,6 +37,15 @@
                     style="max-width: 80%"
                   >
                     <div v-html="formatMessage(message.content)"></div>
+                    
+                    <!-- Отображение источников для ответов ассистента в режиме RAG -->
+                    <div v-if="message.role === 'assistant' && message.sources && message.sources.length > 0 && chatMode === 'rag'" class="mt-3">
+                      <SourceDisplay 
+                        :sources="message.sources"
+                        @show-notification="showNotification"
+                        @open-source-modal="openSourceModal"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -76,14 +85,26 @@
         </div>
       </div>
     </div>
+    
+    <!-- Модальное окно для детальной информации об источнике -->
+    <SourceModal 
+      :source="selectedSourceForModal"
+      @show-notification="showNotification"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import SourceDisplay from '../components/SourceDisplay.vue';
+import SourceModal from '../components/SourceModal.vue';
 
 export default {
   name: "BillingPage",
+  components: {
+    SourceDisplay,
+    SourceModal
+  },
   data() {
     return {
       userMessage: "",
@@ -92,7 +113,8 @@ export default {
       chatMode: "rag", // По умолчанию используем режим с RAG
       requestInProgress: false, // Флаг для отслеживания текущего запроса
       requestTimeout: null, // Таймер для отмены запроса
-      lastRequestTime: 0 // Время последнего запроса
+      lastRequestTime: 0, // Время последнего запроса
+      selectedSourceForModal: null // Выбранный источник для модального окна
     };
   },
   methods: {
@@ -100,6 +122,72 @@ export default {
       if (!text) return '';
       // Заменяем \n на <br> для сохранения переносов строк
       return text.replace(/\n/g, '<br>');
+    },
+    
+    showNotification(notification) {
+      try {
+        // Простая реализация уведомлений
+        const alertClass = notification.type === 'success' ? 'alert-success' : 'alert-danger';
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; max-width: 400px;';
+        alertDiv.innerHTML = `
+          <div class="d-flex align-items-center">
+            <i class="fas ${notification.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+            <span>${notification.message}</span>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        document.body.appendChild(alertDiv);
+        
+        // Автоматически удаляем уведомление через 4 секунды
+        setTimeout(() => {
+          if (alertDiv.parentNode) {
+            alertDiv.parentNode.removeChild(alertDiv);
+          }
+        }, 4000);
+        
+        // Логируем для отладки
+        console.log(`Уведомление: ${notification.type} - ${notification.message}`);
+      } catch (error) {
+        console.error('Ошибка при показе уведомления:', error);
+        // Fallback - простой alert
+        alert(`${notification.type === 'success' ? 'Успех' : 'Ошибка'}: ${notification.message}`);
+      }
+    },
+    
+    openSourceModal(source) {
+      this.selectedSourceForModal = source;
+      
+      // Проверяем, что Bootstrap доступен
+      if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        try {
+          const modalElement = document.getElementById('sourceModal');
+          if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+          } else {
+            console.error('Элемент модального окна не найден');
+            this.showNotification({
+              type: 'error',
+              message: 'Ошибка открытия модального окна'
+            });
+          }
+        } catch (error) {
+          console.error('Ошибка при открытии модального окна:', error);
+          this.showNotification({
+            type: 'error',
+            message: 'Не удалось открыть модальное окно'
+          });
+        }
+      } else {
+        console.error('Bootstrap Modal не доступен');
+        this.showNotification({
+          type: 'error',
+          message: 'Bootstrap не загружен. Перезагрузите страницу.'
+        });
+      }
     },
     async sendMessage() {
       if (!this.userMessage.trim()) return;
@@ -202,6 +290,7 @@ export default {
                 this.chatMessages[processingMessageIndex] = {
                   role: 'assistant',
                   content: taskResult.answer || 'Ответ получен, но содержимое пустое.',
+                  sources: taskResult.sources || [],
                   isProcessing: false
                 };
                 break;

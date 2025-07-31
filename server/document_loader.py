@@ -108,10 +108,15 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
             # Извлечение фрагментов и файлов из метаданных
             top_chunks = []
             top_files = []
+            detailed_results = []
             
             for x in all_results:
+                chunk_content = ""
+                file_path = ""
+                
                 if hasattr(x, 'page_content') and x.page_content.strip():
-                    top_chunks.append(x.page_content)
+                    chunk_content = x.page_content
+                    top_chunks.append(chunk_content)
                 elif hasattr(x, 'metadata') and 'chunk' in x.metadata:
                     chunk_content = x.metadata.get('chunk')
                     if chunk_content and chunk_content.strip():
@@ -119,9 +124,19 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
                     
                 if hasattr(x, 'metadata') and x.metadata:
                     if 'source' in x.metadata and x.metadata.get('source'):
-                        top_files.append(x.metadata.get('source'))
+                        file_path = x.metadata.get('source')
+                        top_files.append(file_path)
                     elif 'file' in x.metadata and x.metadata.get('file'):
-                        top_files.append(x.metadata.get('file'))
+                        file_path = x.metadata.get('file')
+                        top_files.append(file_path)
+                
+                # Сохраняем детальную информацию
+                if chunk_content and file_path:
+                    detailed_results.append({
+                        'chunk_content': chunk_content,
+                        'file_path': file_path,
+                        'metadata': x.metadata if hasattr(x, 'metadata') else {}
+                    })
             
             # Удаляем дубликаты из списка файлов
             top_files = list(set(top_files))
@@ -131,7 +146,7 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
             
             print(f"Отфильтровано {len(top_chunks)} содержательных фрагментов из {len(top_files)} файлов")
             
-            result = [top_chunks, top_files]
+            result = [top_chunks, top_files, detailed_results]
         except Exception as e:
             import traceback
             print(f"Ошибка в vec_search: {e}")
@@ -158,7 +173,7 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
         return [], []
     
     print(f"Улучшенный векторный поиск успешно завершен за {time.time() - start_time:.2f} секунд")
-    return result[0], result[1]
+    return result[0], result[1], result[2] if len(result) > 2 else []
 
 def load_documents_into_database(model_name: str, documents_path: str, department_id: str, reload: bool = True) -> Chroma:
     """
