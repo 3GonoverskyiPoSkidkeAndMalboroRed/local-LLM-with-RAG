@@ -179,47 +179,6 @@ async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы просмотра: {str(e)}")
 
-# # Эндпоинт для загрузки файлов
-# @router.post("/upload-file")
-# async def upload_file(
-#     file: UploadFile = File(...),
-#     directory: str = ""  # Добавляем параметр для указания поддиректории
-# ):
-#     # Создаем базовую директорию /app/files/, если она не существует
-#     os.makedirs("/app/files/", exist_ok=True)
-    
-#     # Формируем путь к директории для сохранения файла
-#     if directory:
-#         # Убираем начальный и конечный слеши, если они есть
-#         directory = directory.strip('/')
-        
-#         # Проверяем, начинается ли путь с /app/files/
-#         if directory.startswith('/app/files/'):
-#             target_dir = directory
-#         else:
-#             target_dir = f"/app/files/{directory}"
-            
-#         # Создаем директорию, если она не существует
-#         os.makedirs(target_dir, exist_ok=True)
-        
-#         # Формируем полный путь к файлу
-#         file_location = f"{target_dir}/{file.filename}"
-#     else:
-#         # Если директория не указана, сохраняем в корневую директорию /app/files/
-#         file_location = f"/app/files/{file.filename}"
-    
-#     # Проверка на уникальность имени файла
-#     if os.path.exists(file_location):
-#         return {"message": f"Файл с таким именем уже существует в {os.path.dirname(file_location)}."}
-
-#     # Сохранение файла в указанную директорию
-#     try:
-#         with open(file_location, "wb") as f:
-#             f.write(await file.read())
-#         return {"message": f"Файл '{file.filename}' успешно загружен в {os.path.dirname(file_location)}."}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Ошибка при сохранении файла: {str(e)}")
-
 @router.post("/upload-content")
 async def upload_content(
     title: str,
@@ -229,31 +188,20 @@ async def upload_content(
     file: UploadFile = File(...),
     tag_id: int = None,
     user_id: int = None,
-    directory: str = "",  # Добавляем параметр для указания поддиректории
     db: Session = Depends(get_db)
 ):
     # Создаем базовую директорию /app/files/, если она не существует
     os.makedirs("/app/files/", exist_ok=True)
     
-    # Формируем путь к директории для сохранения файла
-    if directory:
-        # Убираем начальный и конечный слеши, если они есть
-        directory = directory.strip('/')
-        
-        # Проверяем, начинается ли путь с /app/files/
-        if directory.startswith('/app/files/'):
-            target_dir = directory
-        else:
-            target_dir = f"/app/files/{directory}"
-            
-        # Создаем директорию, если она не существует
-        os.makedirs(target_dir, exist_ok=True)
-        
-        # Формируем полный путь к файлу
-        file_location = f"{target_dir}/{file.filename}"
-    else:
-        # Если директория не указана, сохраняем в корневую директорию /app/files/
-        file_location = f"/app/files/{file.filename}"
+    # Автоматически формируем путь на основе ID отдела
+    department_directory = f"ContentForDepartment/{department_id}"
+    target_dir = f"/app/files/{department_directory}"
+    
+    # Создаем директорию для отдела, если она не существует
+    os.makedirs(target_dir, exist_ok=True)
+    
+    # Формируем полный путь к файлу
+    file_location = f"{target_dir}/{file.filename}"
     
     try:
         with open(file_location, "wb") as f:
@@ -284,7 +232,6 @@ async def upload_content(
 @router.post("/upload-files")
 async def upload_files(
     files: List[UploadFile] = File(...),
-    directory: str = "",  # Параметр для указания поддиректории
     access_level: int = 1,
     department_id: int = 1,
     db: Session = Depends(get_db)
@@ -293,19 +240,12 @@ async def upload_files(
     base_dir = "/app/files"
     os.makedirs(base_dir, exist_ok=True)
     
-    # Формируем путь к поддиректории
-    if directory:
-        # Очищаем путь от начальных и конечных слешей
-        clean_directory = directory.strip('/')
-        
-        # Создаем полный путь внутри базовой директории
-        target_dir = os.path.join(base_dir, clean_directory)
-        
-        # Создаем все необходимые поддиректории
-        os.makedirs(target_dir, exist_ok=True)
-    else:
-        # Если директория не указана, используем базовую
-        target_dir = base_dir
+    # Автоматически формируем путь на основе ID отдела
+    department_directory = f"ContentForDepartment/{department_id}"
+    target_dir = os.path.join(base_dir, department_directory)
+    
+    # Создаем директорию для отдела, если она не существует
+    os.makedirs(target_dir, exist_ok=True)
     
     # Список для хранения информации о загруженных файлах
     uploaded_files_info = []
