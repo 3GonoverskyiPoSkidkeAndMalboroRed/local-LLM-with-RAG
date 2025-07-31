@@ -11,6 +11,9 @@
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="upload-files-tab" data-bs-toggle="pill" data-bs-target="#upload-files" type="button" role="tab" aria-controls="upload-files" aria-selected="false">Загрузка файлов</button>
       </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="view-files-tab" data-bs-toggle="pill" data-bs-target="#view-files" type="button" role="tab" aria-controls="view-files" aria-selected="false">Просмотр файлов</button>
+      </li>
     </ul>
     
     <!-- Содержимое подвкладок -->
@@ -113,10 +116,71 @@
           <div v-if="uploadMessage" :class="['alert', uploadStatus ? 'alert-success' : 'alert-danger', 'mt-3']">
             {{ uploadMessage }}
           </div>
-        </form>
-      </div>
-    </div>
-  </div>
+                 </form>
+       </div>
+       
+       <!-- Вкладка просмотра файлов -->
+       <div class="tab-pane fade" id="view-files" role="tabpanel" aria-labelledby="view-files-tab">
+         <div class="row">
+           <div class="col-md-6 mb-3">
+             <label for="view-department-id" class="form-label">Идентификатор отдела</label>
+             <input type="number" class="form-control" id="view-department-id" v-model="viewForm.departmentId" min="1" placeholder="Например: 5">
+           </div>
+           <div class="col-md-6 mb-3 d-flex align-items-end">
+             <button @click="loadDepartmentFiles" class="btn btn-info" :disabled="isLoadingFiles">
+               <span v-if="isLoadingFiles" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+               {{ isLoadingFiles ? 'Загрузка...' : 'Показать файлы' }}
+             </button>
+           </div>
+         </div>
+         
+         <div v-if="departmentFiles" class="row">
+           <div class="col-12">
+             <div class="card">
+               <div class="card-header">
+                 <h6 class="mb-0">Файлы отдела {{ viewForm.departmentId }}</h6>
+               </div>
+               <div class="card-body">
+                 <div v-if="departmentFiles.exists">
+                   <p class="text-success">{{ departmentFiles.message }}</p>
+                   <p><strong>Путь:</strong> {{ departmentFiles.path }}</p>
+                   <div v-if="departmentFiles.files.length > 0">
+                     <h6>Список файлов ({{ departmentFiles.total_files }}):</h6>
+                     <div class="table-responsive">
+                       <table class="table table-striped">
+                         <thead>
+                           <tr>
+                             <th>Имя файла</th>
+                             <th>Размер</th>
+                           </tr>
+                         </thead>
+                         <tbody>
+                           <tr v-for="file in departmentFiles.files" :key="file.name">
+                             <td>{{ file.name }}</td>
+                             <td>{{ file.size_formatted }}</td>
+                           </tr>
+                         </tbody>
+                       </table>
+                     </div>
+                   </div>
+                   <div v-else>
+                     <p class="text-muted">В директории нет файлов</p>
+                   </div>
+                 </div>
+                 <div v-else>
+                   <p class="text-warning">{{ departmentFiles.message }}</p>
+                 </div>
+               </div>
+             </div>
+           </div>
+         </div>
+         
+         <div v-if="viewMessage" :class="['alert', viewStatus ? 'alert-success' : 'alert-danger', 'mt-3']">
+           {{ viewMessage }}
+         </div>
+       </div>
+     </div>
+   </div>
 
   
 </template>
@@ -133,7 +197,6 @@ export default {
       initializeForm: {
         model_name: '',
         embedding_model_name: '',
-        documents_path: 'Research',
         confirm: false,
         department_id: null
       },
@@ -149,15 +212,24 @@ export default {
       directoryStatus: false,
       isCreatingDirectory: false,
       
-      // Данные для загрузки файлов
-      uploadForm: {
-        accessLevel: 1,
-        departmentId: 1
-      },
-      selectedFiles: [],
-      uploadMessage: '',
-      uploadStatus: false,
-      isUploading: false
+             // Данные для загрузки файлов
+       uploadForm: {
+         accessLevel: 1,
+         departmentId: 1
+       },
+       selectedFiles: [],
+       uploadMessage: '',
+       uploadStatus: false,
+       isUploading: false,
+       
+       // Данные для просмотра файлов
+       viewForm: {
+         departmentId: 5
+       },
+       departmentFiles: null,
+       viewMessage: '',
+       viewStatus: false,
+       isLoadingFiles: false
     };
   },
   methods: {
@@ -175,8 +247,7 @@ export default {
       try {
         const modelName = this.initializeForm.model_name.trim();
         const embeddingModelName = this.initializeForm.embedding_model_name.trim();
-        const documentsPath = this.initializeForm.documents_path.trim();
-        const departmentId = this.initializeForm.department_id.trim();
+        const departmentId = this.initializeForm.department_id;
         
         if (!departmentId) {
           this.initializeMessage = 'ID отдела не может быть пустым';
@@ -185,16 +256,19 @@ export default {
           return;
         }
         
+        // Автоматически используем ID отдела как путь к документам
+        const documentsPath = departmentId.toString();
+        
         const requestData = {
           model_name: modelName,
           embedding_model_name: embeddingModelName,
           documents_path: documentsPath,
-          department_id: departmentId
+          department_id: departmentId.toString()
         };
         
         const response = await axios.post(`${import.meta.env.VITE_API_URL}/llm/initialize`, requestData);
         
-        this.initializeMessage = 'LLM успешно инициализирован!';
+        this.initializeMessage = `LLM для отдела ${departmentId} успешно инициализирован! Документы загружены из папки ContentForDepartment/${departmentId}`;
         this.initializeStatus = true;
         this.initializeForm.confirm = false;
       } catch (error) {
@@ -315,10 +389,37 @@ export default {
         this.uploadStatus = false;
         console.error('Ошибка загрузки файлов:', error);
       } finally {
-        this.isUploading = false;
-      }
-    }
-  },
+                 this.isUploading = false;
+       }
+     },
+     
+     // Метод для загрузки файлов отдела
+     async loadDepartmentFiles() {
+       if (!this.viewForm.departmentId) {
+         this.viewMessage = 'Пожалуйста, укажите ID отдела';
+         this.viewStatus = false;
+         return;
+       }
+       
+       this.isLoadingFiles = true;
+       this.viewMessage = 'Загрузка списка файлов...';
+       this.viewStatus = true;
+       
+       try {
+         const response = await axios.get(`${import.meta.env.VITE_API_URL}/content/list-files/${this.viewForm.departmentId}`);
+         
+         this.departmentFiles = response.data;
+         this.viewMessage = 'Список файлов успешно загружен';
+         this.viewStatus = true;
+       } catch (error) {
+         this.viewMessage = 'Ошибка загрузки списка файлов: ' + (error.response?.data?.detail || error.message);
+         this.viewStatus = false;
+         console.error('Ошибка загрузки файлов:', error);
+       } finally {
+         this.isLoadingFiles = false;
+       }
+     }
+   },
   mounted() {
     // Инициализация Bootstrap компонентов
     const tabElements = document.querySelectorAll('#llmTabs [data-bs-toggle="pill"]');

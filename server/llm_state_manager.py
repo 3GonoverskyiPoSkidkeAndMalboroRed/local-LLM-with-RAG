@@ -112,6 +112,23 @@ class LLMStateManager:
         print(f"DEBUG: initialize_llm вызван для отдела {department_id}, id менеджера: {id(self)}")
         print(f"Инициализация LLM для отдела {department_id}...")
         
+        # ВСЕГДА создаем директорию ContentForDepartment для отдела, если она не существует
+        # Это должно происходить ДО всех проверок инициализации
+        content_department_path = f"/app/files/ContentForDepartment/{department_id}"
+        print(f"DEBUG: Проверяем существование директории: {content_department_path}")
+        if not os.path.exists(content_department_path):
+            print(f"Создаем директорию для документов отдела {department_id}: {content_department_path}")
+            os.makedirs(content_department_path, exist_ok=True)
+            
+            # Если директория пуста, создаем пустой файл README.md
+            if not os.listdir(content_department_path):
+                readme_path = os.path.join(content_department_path, "README.md")
+                with open(readme_path, 'w') as f:
+                    f.write("# Директория для документов\n\nЭта директория создана для хранения документов для RAG.")
+                print(f"Создан файл README.md в {content_department_path}")
+        else:
+            print(f"Директория для документов отдела {department_id} уже существует: {content_department_path}")
+        
         # Проверяем, не был ли отдел уже инициализирован
         if not reload and self.is_department_initialized(department_id):
             print(f"WARNING: Отдел {department_id} уже инициализирован, пропускаем")
