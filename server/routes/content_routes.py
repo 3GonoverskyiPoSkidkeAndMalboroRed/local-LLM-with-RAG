@@ -238,14 +238,18 @@ async def upload_files(
 ):
     # Базовая директория для всех файлов
     base_dir = "/app/files"
+    print(f"DEBUG: Создаем базовую директорию: {base_dir}")
     os.makedirs(base_dir, exist_ok=True)
+    print(f"DEBUG: Базовая директория создана/существует: {os.path.exists(base_dir)}")
     
     # Автоматически формируем путь на основе ID отдела
     department_directory = f"ContentForDepartment/{department_id}"
     target_dir = os.path.join(base_dir, department_directory)
+    print(f"DEBUG: Целевая директория: {target_dir}")
     
     # Создаем директорию для отдела, если она не существует
     os.makedirs(target_dir, exist_ok=True)
+    print(f"DEBUG: Директория отдела создана/существует: {os.path.exists(target_dir)}")
     
     # Список для хранения информации о загруженных файлах
     uploaded_files_info = []
@@ -569,12 +573,97 @@ async def update_tag(tag_id: int, tag_name: str, db: Session = Depends(get_db)):
 
 @router.delete("/delete-tag/{tag_id}")
 async def delete_tag(tag_id: int, db: Session = Depends(get_db)):
+    """
+    Удаляет тег по ID.
+    """
     try:
         tag = db.query(Tag).filter(Tag.id == tag_id).first()
-        if tag is None: 
+        if tag is None:
             raise HTTPException(status_code=404, detail="Тег не найден")
+        
         db.delete(tag)
         db.commit()
         return {"message": "Тег успешно удален"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при удалении тега: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении тега: {str(e)}")
+
+@router.get("/list-files/{department_id}")
+async def list_department_files(department_id: int):
+    """
+    Возвращает список файлов в директории отдела.
+    """
+    try:
+        # Формируем путь к директории отдела
+        department_path = f"/app/files/ContentForDepartment/{department_id}"
+        
+        if not os.path.exists(department_path):
+            return {
+                "department_id": department_id,
+                "path": department_path,
+                "exists": False,
+                "files": [],
+                "message": f"Директория для отдела {department_id} не существует"
+            }
+        
+        # Получаем список файлов
+        files = []
+        for filename in os.listdir(department_path):
+            file_path = os.path.join(department_path, filename)
+            if os.path.isfile(file_path):
+                file_size = os.path.getsize(file_path)
+                files.append({
+                    "name": filename,
+                    "size": file_size,
+                    "size_formatted": f"{file_size} bytes"
+                })
+        
+        return {
+            "department_id": department_id,
+            "path": department_path,
+            "exists": True,
+            "files": files,
+            "total_files": len(files),
+            "message": f"Найдено {len(files)} файлов в директории отдела {department_id}"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении списка файлов: {str(e)}")
+
+@router.get("/list-all-departments")
+async def list_all_departments():
+    """
+    Возвращает список всех отделов с файлами.
+    """
+    try:
+        base_path = "/app/files/ContentForDepartment"
+        
+        if not os.path.exists(base_path):
+            return {
+                "base_path": base_path,
+                "exists": False,
+                "departments": [],
+                "message": "Базовая директория не существует"
+            }
+        
+        departments = []
+        for item in os.listdir(base_path):
+            item_path = os.path.join(base_path, item)
+            if os.path.isdir(item_path):
+                # Подсчитываем файлы в директории
+                file_count = len([f for f in os.listdir(item_path) if os.path.isfile(os.path.join(item_path, f))])
+                departments.append({
+                    "department_id": item,
+                    "file_count": file_count,
+                    "path": item_path
+                })
+        
+        return {
+            "base_path": base_path,
+            "exists": True,
+            "departments": departments,
+            "total_departments": len(departments),
+            "message": f"Найдено {len(departments)} отделов"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении списка отделов: {str(e)}") 

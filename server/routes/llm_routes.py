@@ -297,29 +297,37 @@ async def debug_reinitialize_department(department_id: str):
     try:
         print(f"DEBUG: Принудительная переинициализация отдела {department_id}")
         
-   
-
-        # Инициализация для отделов 1-5
-        if department_id in ["1", "2", "3", "4", "5"]:
+        # Сначала принудительно очищаем отдел
+        cleanup_result = llm_state_manager.force_cleanup_department(department_id)
+        print(f"DEBUG: Результат очистки отдела {department_id}: {cleanup_result}")
+        
+        # Инициализация для всех отделов
+        print(f"DEBUG: Вызываем initialize_llm для отдела {department_id}")
+        try:
             success = llm_state_manager.initialize_llm(
                 "gemma3",
                 "nomic-embed-text", 
-                "Research",
+                department_id,  # Используем department_id как documents_path для автоматического формирования пути
                 department_id,
                 reload=True
             )
-        else:
-            return {"error": f"Неизвестный отдел {department_id}. Поддерживаются только отделы 1-5."}
+            print(f"DEBUG: Результат initialize_llm для отдела {department_id}: {success}")
+        except Exception as e:
+            print(f"DEBUG: Ошибка при вызове initialize_llm для отдела {department_id}: {e}")
+            print(f"DEBUG: Traceback: {traceback.format_exc()}")
+            raise
         
         if success:
             return {
-                "message": f"Отдел {department_id} успешно переинициализирован",
-                "success": True
+                "message": f"Отдел {department_id} успешно переинициализирован с очисткой старых данных",
+                "success": True,
+                "cleanup_result": cleanup_result
             }
         else:
             return {
                 "message": f"Ошибка при переинициализации отдела {department_id}",
-                "success": False
+                "success": False,
+                "cleanup_result": cleanup_result
             }
             
     except Exception as e:
@@ -397,7 +405,7 @@ async def query(request: QueryRequest, background_tasks: BackgroundTasks):
                 auto_restore_success = llm_state_manager.initialize_llm(
                     "gemma3",
                     "nomic-embed-text", 
-                    "Research",
+                    department_id,  # Используем department_id как documents_path для автоматического формирования пути
                     department_id,
                     reload=True
                 )

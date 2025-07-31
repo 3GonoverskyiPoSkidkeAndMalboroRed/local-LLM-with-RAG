@@ -41,6 +41,7 @@ services:
       - app-network
     volumes:
       - files_storage:/app/files
+      - ./server:/app
 
   frontend:
     build:

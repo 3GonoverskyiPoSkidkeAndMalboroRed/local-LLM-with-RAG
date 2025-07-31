@@ -174,8 +174,27 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     Returns:
         Chroma: Векторная база данных с загруженными документами.
     """
+    print(f"DEBUG: Начало load_documents_into_database")
+    print(f"DEBUG: model_name={model_name}, documents_path={documents_path}, department_id={department_id}, reload={reload}")
+    
+    # ВСЕГДА создаем директорию ContentForDepartment для отдела, если она не существует
+    content_department_path = f"/app/files/ContentForDepartment/{department_id}"
+    if not os.path.exists(content_department_path):
+        print(f"Создаем директорию для документов отдела {department_id}: {content_department_path}")
+        os.makedirs(content_department_path, exist_ok=True)
+        
+        # Если директория пуста, создаем пустой файл README.md
+        if not os.listdir(content_department_path):
+            readme_path = os.path.join(content_department_path, "README.md")
+            with open(readme_path, 'w') as f:
+                f.write("# Директория для документов\n\nЭта директория создана для хранения документов для RAG.")
+            print(f"Создан файл README.md в {content_department_path}")
+    else:
+        print(f"Директория для документов отдела {department_id} уже существует: {content_department_path}")
+    
     # Определяем директорию для хранения данных в зависимости от отдела
     department_directory = f"{PERSIST_DIRECTORY}/{department_id}"
+    print(f"DEBUG: department_directory={department_directory}")
 
     # Создаем директорию для хранения данных, если она не существует
     os.makedirs(PERSIST_DIRECTORY, exist_ok=True)
@@ -194,14 +213,19 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     print(f"Загрузка документов для отдела {department_id}...")
     
     # Автоматически формируем путь на основе ID отдела
+    print(f"DEBUG: Исходный documents_path: {documents_path}")
     if not documents_path.startswith('/app/files/'):
         # Если передан просто ID отдела или название, формируем полный путь
         if documents_path.isdigit():
             # Если передан только ID отдела, используем стандартную структуру
             documents_path = f"/app/files/ContentForDepartment/{documents_path}"
+            print(f"DEBUG: Сформирован путь для отдела: {documents_path}")
         else:
             # Если передан путь, добавляем префикс
             documents_path = f"/app/files/{documents_path}"
+            print(f"DEBUG: Добавлен префикс к пути: {documents_path}")
+    else:
+        print(f"DEBUG: Путь уже содержит /app/files/: {documents_path}")
     
     # Проверяем существование пути к документам
     if not os.path.exists(documents_path):
@@ -225,7 +249,12 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
             raise FileNotFoundError(f"Не удалось создать директорию: {documents_path}. Ошибка: {e}")
     
     try:
+        print(f"DEBUG: Загружаем документы из: {documents_path}")
         raw_documents = load_documents(documents_path)
+        print(f"DEBUG: Загружено {len(raw_documents)} документов")
+        for i, doc in enumerate(raw_documents[:3]):  # Показываем первые 3 документа
+            source = doc.metadata.get('source', 'unknown') if hasattr(doc, 'metadata') else 'unknown'
+            print(f"DEBUG: Документ {i+1}: {source}")
     except Exception as e:
         print(f"Ошибка при загрузке документов: {e}")
         # Если нет документов, создаем пустую базу
