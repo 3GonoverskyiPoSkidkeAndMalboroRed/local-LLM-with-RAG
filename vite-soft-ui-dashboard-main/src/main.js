@@ -26,6 +26,9 @@ import axiosInstance from './utils/axiosConfig';
 import { setupGlobalErrorHandlers } from './utils/errorLogger';
 import { clearExpiredCache } from './utils/localStorageCache';
 
+// Импортируем Bootstrap JavaScript
+import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+
 // Устанавливаем глобальный экземпляр Axios
 window.axios = axiosInstance;
 
