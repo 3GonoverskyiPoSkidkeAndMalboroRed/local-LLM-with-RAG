@@ -9,7 +9,7 @@
         <button class="nav-link" id="create-dir-tab" data-bs-toggle="pill" data-bs-target="#create-dir" type="button" role="tab" aria-controls="create-dir" aria-selected="false">Создание директории</button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="upload-files-tab" data-bs-toggle="pill" data-bs-target="#upload-files" type="button" role="tab" aria-controls="upload-files" aria-selected="false">Файлы для чат-бота</button>
+        <button class="nav-link" id="upload-files-tab" data-bs-toggle="pill" data-bs-target="#upload-files" type="button" role="tab" aria-controls="upload-files" aria-selected="false">Загрузка файлов</button>
       </li>
     </ul>
     
@@ -30,16 +30,9 @@
           </div>
           <div class="row">
             <div class="col-12 mb-3">
-              <label for="documents-path" class="form-label">Путь к документам</label>
-              <input type="text" class="form-control" id="documents-path" v-model="initializeForm.documents_path" placeholder="Например: Research" required>
-              <small class="text-muted">Укажите путь к директории с документами для индексации</small>
-            </div>
-          </div>
-          <div class="row">
-            <div class="col-12 mb-3">
               <label for="department-id" class="form-label">Идентификатор отдела</label>
-              <input type="text" class="form-control" id="department-id" v-model="initializeForm.department_id" required placeholder="Введите идентификатор отдела">
-              <small class="text-muted">Укажите идентификатор отдела для создания уникальной базы данных</small>
+              <input type="number" class="form-control" id="department-id" v-model="initializeForm.department_id" required min="1" placeholder="Например: 5">
+              <small class="text-muted">Укажите идентификатор отдела. Документы будут автоматически загружены из папки ContentForDepartment/{ID отдела}</small>
             </div>
           </div>
           <div class="row mb-3">
@@ -86,20 +79,14 @@
       <div class="tab-pane fade" id="upload-files" role="tabpanel" aria-labelledby="upload-files-tab">
         <form @submit.prevent="uploadFiles">
           <div class="row">
-            <div class="col-12 mb-3">
-              <label for="upload-directory" class="form-label">Директория для загрузки</label>
-              <input type="text" class="form-control" id="upload-directory" v-model="uploadForm.directory" placeholder="Например: Research/Documents">
-              <small class="text-muted">Укажите директорию, в которую будут загружены файлы (относительно /app/files/)</small>
-            </div>
-          </div>
-          <div class="row">
             <div class="col-md-6 mb-3">
               <label for="access-level" class="form-label">Уровень доступа</label>
               <input type="number" class="form-control" id="access-level" v-model="uploadForm.accessLevel" required min="1" placeholder="Например: 1">
             </div>
             <div class="col-md-6 mb-3">
               <label for="upload-department-id" class="form-label">Идентификатор отдела</label>
-              <input type="number" class="form-control" id="upload-department-id" v-model="uploadForm.departmentId" required min="1" placeholder="Например: 1">
+              <input type="number" class="form-control" id="upload-department-id" v-model="uploadForm.departmentId" required min="1" placeholder="Например: 5">
+              <small class="text-muted">Файлы будут автоматически сохранены в папку ContentForDepartment/{ID отдела}</small>
             </div>
           </div>
           <div class="row">
@@ -164,7 +151,6 @@ export default {
       
       // Данные для загрузки файлов
       uploadForm: {
-        directory: '',
         accessLevel: 1,
         departmentId: 1
       },
@@ -292,25 +278,18 @@ export default {
           formData.append('files', file);
         });
         
-        // Добавляем параметры как строковые значения
-        const directory = this.uploadForm.directory.trim();
-        
-        // Формируем URL с query-параметрами вместо добавления их в FormData
+        // Формируем URL с query-параметрами
         let url = `${import.meta.env.VITE_API_URL}/content/upload-files`;
         const params = new URLSearchParams();
         
-        if (directory) {
-          params.append('directory', directory);
-        }
         params.append('access_level', this.uploadForm.accessLevel.toString());
         params.append('department_id', this.uploadForm.departmentId.toString());
         
         // Добавляем параметры к URL
-        if (params.toString()) {
-          url += '?' + params.toString();
-        }
+        url += '?' + params.toString();
         
         console.log('Отправка запроса на URL:', url);
+        console.log('ID отдела:', this.uploadForm.departmentId);
         
         // Отправляем запрос на сервер
         const response = await axios.post(
@@ -323,7 +302,7 @@ export default {
           }
         );
         
-        this.uploadMessage = `Файлы успешно загружены! (${this.selectedFiles.length} файл(ов))`;
+        this.uploadMessage = `Файлы успешно загружены в папку ContentForDepartment/${this.uploadForm.departmentId}! (${this.selectedFiles.length} файл(ов))`;
         this.uploadStatus = true;
         
         // Очищаем форму после успешной загрузки

@@ -193,9 +193,15 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     # Если нужно перезагрузить документы или директория не существует
     print(f"Загрузка документов для отдела {department_id}...")
     
-    # Если documents_path не начинается с /app/files/, добавляем этот префикс
+    # Автоматически формируем путь на основе ID отдела
     if not documents_path.startswith('/app/files/'):
-        documents_path = f"/app/files/{documents_path}"
+        # Если передан просто ID отдела или название, формируем полный путь
+        if documents_path.isdigit():
+            # Если передан только ID отдела, используем стандартную структуру
+            documents_path = f"/app/files/ContentForDepartment/{documents_path}"
+        else:
+            # Если передан путь, добавляем префикс
+            documents_path = f"/app/files/{documents_path}"
     
     # Проверяем существование пути к документам
     if not os.path.exists(documents_path):
