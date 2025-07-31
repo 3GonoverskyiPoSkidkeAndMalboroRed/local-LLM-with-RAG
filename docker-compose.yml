@@ -118,22 +118,10 @@ services:
       timeout: 10s
       retries: 3
 
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"  # Порт для подключения к RabbitMQ
-      - "15672:15672"  # Порт для веб-интерфейса управления
-    environment:
-      RABBITMQ_DEFAULT_USER: user
-      RABBITMQ_DEFAULT_PASS: password
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - app-network
+
 
 volumes:
   db_data:
-  rabbitmq_data:
   files_storage:
   ollama_data:
 
