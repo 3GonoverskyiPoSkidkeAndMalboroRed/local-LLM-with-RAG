@@ -45,7 +45,7 @@
             <a
               id="iconNavbarSidenav"
               href="#"
-              class="p-0 nav-link text-body"
+              class="p-0 nav-link text-body navbar-btn-animated"
               @click="toggleSidebar"
             >
               <div class="sidenav-toggler-inner">
@@ -243,3 +243,70 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.navbar-btn-animated {
+  transition: all 0.2s ease-in-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.navbar-btn-animated:hover {
+  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.navbar-btn-animated:active {
+  transform: scale(0.95);
+}
+
+.navbar-btn-animated::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.4s;
+}
+
+.navbar-btn-animated:hover::before {
+  left: 100%;
+}
+
+.sidenav-toggler-inner {
+  transition: all 0.3s ease-in-out;
+}
+
+.navbar-btn-animated:hover .sidenav-toggler-inner {
+  transform: rotate(90deg);
+}
+
+.sidenav-toggler-line {
+  transition: all 0.3s ease-in-out;
+}
+
+.navbar-btn-animated:hover .sidenav-toggler-line:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.navbar-btn-animated:hover .sidenav-toggler-line:nth-child(2) {
+  opacity: 0;
+}
+
+.navbar-btn-animated:hover .sidenav-toggler-line:nth-child(3) {
+  transform: rotate(-45deg) translate(7px, -6px);
+}
+
+/* Эффект для dropdown элементов */
+.dropdown-item {
+  transition: all 0.2s ease-in-out;
+}
+
+.dropdown-item:hover {
+  transform: translateX(5px);
+  background: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+}
+</style>
