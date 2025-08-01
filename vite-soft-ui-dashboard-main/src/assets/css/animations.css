@@ -1,0 +1,377 @@
+/* Глобальные анимации для приложения */
+
+/* Fade эффекты */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.1s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Slide эффекты */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-up-enter-from {
+  transform: translateY(30px);
+  opacity: 0;
+}
+
+.slide-up-leave-to {
+  transform: translateY(-30px);
+  opacity: 0;
+}
+
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-down-enter-from {
+  transform: translateY(-30px);
+  opacity: 0;
+}
+
+.slide-down-leave-to {
+  transform: translateY(30px);
+  opacity: 0;
+}
+
+.slide-left-enter-active,
+.slide-left-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-left-enter-from {
+  transform: translateX(30px);
+  opacity: 0;
+}
+
+.slide-left-leave-to {
+  transform: translateX(-30px);
+  opacity: 0;
+}
+
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-right-enter-from {
+  transform: translateX(-30px);
+  opacity: 0;
+}
+
+.slide-right-leave-to {
+  transform: translateX(30px);
+  opacity: 0;
+}
+
+/* Scale эффекты */
+.scale-enter-active,
+.scale-leave-active {
+  transition: all 0.3s ease;
+}
+
+.scale-enter-from {
+  transform: scale(0.8);
+  opacity: 0;
+}
+
+.scale-leave-to {
+  transform: scale(1.2);
+  opacity: 0;
+}
+
+/* Bounce эффекты */
+.bounce-enter-active {
+  animation: bounce-in 0.5s;
+}
+
+.bounce-leave-active {
+  animation: bounce-in 0.5s reverse;
+}
+
+@keyframes bounce-in {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Flip эффекты */
+.flip-enter-active,
+.flip-leave-active {
+  transition: all 0.6s;
+  transform-style: preserve-3d;
+}
+
+.flip-enter-from {
+  transform: rotateY(-180deg);
+  opacity: 0;
+}
+
+.flip-leave-to {
+  transform: rotateY(180deg);
+  opacity: 0;
+}
+
+/* Zoom эффекты */
+.zoom-enter-active,
+.zoom-leave-active {
+  transition: all 0.3s ease;
+}
+
+.zoom-enter-from {
+  transform: scale(0.5);
+  opacity: 0;
+}
+
+.zoom-leave-to {
+  transform: scale(1.5);
+  opacity: 0;
+}
+
+/* Hover эффекты для карточек */
+.card-hover {
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.card-hover:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Hover эффекты для кнопок */
+.btn-hover {
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Hover эффекты для ссылок */
+.link-hover {
+  transition: all 0.2s ease-in-out;
+  position: relative;
+}
+
+.link-hover::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: currentColor;
+  transition: width 0.3s ease;
+}
+
+.link-hover:hover::after {
+  width: 100%;
+}
+
+/* Loading анимации */
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Pulse анимация */
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Shake анимация */
+.shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-5px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+/* Fade in анимация */
+.fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slide in анимация */
+.slide-in-left {
+  animation: slideInLeft 0.5s ease-out;
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.slide-in-right {
+  animation: slideInRight 0.5s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Утилиты для анимаций */
+.animate-delay-100 {
+  animation-delay: 0.1s;
+}
+
+.animate-delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animate-delay-300 {
+  animation-delay: 0.3s;
+}
+
+.animate-delay-500 {
+  animation-delay: 0.5s;
+}
+
+.animate-duration-300 {
+  animation-duration: 0.3s;
+}
+
+.animate-duration-500 {
+  animation-duration: 0.5s;
+}
+
+.animate-duration-700 {
+  animation-duration: 0.7s;
+}
+
+.animate-duration-1000 {
+  animation-duration: 1s;
+}
+
+/* Эффекты для мобильных устройств */
+@media (max-width: 768px) {
+  .card-hover:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  
+  .btn-hover:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* Улучшенные переходы для всех интерактивных элементов */
+* {
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+/* Специальные эффекты для форм */
+.form-control:focus {
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}
+
+/* Эффекты для таблиц */
+.table-hover tbody tr {
+  transition: all 0.2s ease;
+}
+
+.table-hover tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  transform: scale(1.01);
+}
+
+/* Эффекты для модальных окон */
+.modal.fade .modal-dialog {
+  transition: transform 0.3s ease-out;
+  transform: translate(0, -50px);
+}
+
+.modal.show .modal-dialog {
+  transform: none;
+}
+
+/* Эффекты для dropdown меню */
+.dropdown-menu {
+  animation: dropdownFadeIn 0.2s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+} 
