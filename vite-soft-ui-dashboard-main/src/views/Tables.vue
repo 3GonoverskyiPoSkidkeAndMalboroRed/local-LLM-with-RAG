@@ -98,7 +98,7 @@
                     </div>
                     <div class="col-md-6 mb-3">
                       <label for="description" class="form-label">Описание</label>
-                      <textarea class="form-control" id="description" rows="3" v-model="contentForm.description"></textarea>
+                      <textarea class="form-control" id="description" rows="3" v-model="contentForm.description" required></textarea>
                     </div>
                   </div>
                   <div class="row">
@@ -109,6 +109,7 @@
                           {{ department.department_name }}
                         </option>
                       </select>
+                      <small class="text-muted">Файлы будут автоматически сохранены в папку ContentForDepartment/AllTypesOfFiles/{ID отдела}</small>
                     </div>
                     <div class="col-md-6 mb-3">
                       <label for="access_level" class="form-label">Уровень доступа</label>
@@ -130,13 +131,7 @@
                       </select>
                     </div>
                     <div class="col-md-6 mb-3">
-                      <label for="directory_path" class="form-label">Директория</label>
-                      <input type="text" class="form-control" id="directory_path" v-model="contentForm.directory_path" placeholder="Укажите директорию">
-                    </div>
-                  </div>
-                  <div class="row">
-                    <div class="col-md-6 mb-3">
-                      <label for="file" class="form-label">Файл</label>
+                      <label for="file" class="form-label">Выбор файла</label>
                       <input type="file" class="form-control" id="file" @change="handleFileUpload" required>
                     </div>
                   </div>
@@ -686,8 +681,7 @@ export default {
         department_id: null,
         access_level: null,
         tag_id: null,
-        file: null,
-        directory_path: ''
+        file: null
       },
       uploadMessage: '',
       uploadStatus: false,
@@ -902,8 +896,8 @@ export default {
     async uploadContent() {
       try {
         if (!this.contentForm.title || !this.contentForm.description || !this.contentForm.department_id || 
-            !this.contentForm.access_level || !this.contentForm.file || !this.contentForm.directory_path) {
-          this.uploadMessage = 'Все поля должны быть заполнены';
+            !this.contentForm.access_level || !this.contentForm.file) {
+          this.uploadMessage = 'Все обязательные поля должны быть заполнены';
           this.uploadStatus = false;
           return;
         }
@@ -917,8 +911,7 @@ export default {
             `&description=${encodeURIComponent(this.contentForm.description)}` +
             `&access_id=${this.contentForm.access_level}` +
             `&department_id=${this.contentForm.department_id}` +
-            `&tag_id=${this.contentForm.tag_id || ''}` +
-            `&directory_path=${encodeURIComponent(this.contentForm.directory_path)}`,
+            `&tag_id=${this.contentForm.tag_id || ''}`,
             formData,
             {
                 headers: {
@@ -927,7 +920,7 @@ export default {
             }
         );
         
-        this.uploadMessage = 'Контент успешно загружен!';
+        this.uploadMessage = `Контент успешно загружен в папку ContentForDepartment/AllTypesOfFiles/${this.contentForm.department_id}!`;
         this.uploadStatus = true;
         
         // Очистка формы
@@ -937,8 +930,7 @@ export default {
           department_id: null,
           access_level: null,
           tag_id: null,
-          file: null,
-          directory_path: ''
+          file: null
         };
         
         // Сбрасываем поле загрузки файла

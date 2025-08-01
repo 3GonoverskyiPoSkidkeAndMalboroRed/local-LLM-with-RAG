@@ -193,8 +193,8 @@ async def upload_content(
     # Создаем базовую директорию /app/files/, если она не существует
     os.makedirs("/app/files/", exist_ok=True)
     
-    # Автоматически формируем путь на основе ID отдела
-    department_directory = f"ContentForDepartment/{department_id}"
+    # Автоматически формируем путь на основе ID отдела с новой структурой
+    department_directory = f"ContentForDepartment/AllTypesOfFiles/{department_id}"
     target_dir = f"/app/files/{department_directory}"
     
     # Создаем директорию для отдела, если она не существует
