@@ -1,7 +1,7 @@
 <template>
   <transition
-    :name="transitionName"
-    :mode="mode"
+    :name="currentTransitionName"
+    :mode="currentMode"
     @before-enter="beforeEnter"
     @enter="enter"
     @leave="leave"
@@ -13,20 +13,40 @@
 </template>
 
 <script>
+import { mapGetters } from 'vuex';
+
 export default {
   name: 'PageTransition',
   props: {
     transitionName: {
       type: String,
-      default: 'page-transition'
+      default: null // Если не указан, будет использоваться из store
     },
     mode: {
       type: String,
-      default: 'out-in'
+      default: null // Если не указан, будет использоваться из store
     },
     duration: {
       type: Number,
-      default: 300
+      default: null // Если не указан, будет использоваться из store
+    }
+  },
+  computed: {
+    ...mapGetters(['getRouteTransition']),
+    currentTransitionName() {
+      // Приоритет: props -> route-specific -> default
+      if (this.transitionName) {
+        return this.transitionName;
+      }
+      
+      const route = this.$route;
+      return this.getRouteTransition(route.name);
+    },
+    currentMode() {
+      return this.mode || this.$store.state.pageTransition.mode;
+    },
+    currentDuration() {
+      return this.duration || this.$store.state.pageTransition.duration;
     }
   },
   methods: {
@@ -37,7 +57,7 @@ export default {
       el.style.filter = 'blur(2px)';
     },
     enter(el, done) {
-      const duration = this.duration;
+      const duration = this.currentDuration;
       const startTime = Date.now();
       
       const animate = () => {
@@ -61,7 +81,7 @@ export default {
       requestAnimationFrame(animate);
     },
     leave(el, done) {
-      const duration = this.duration * 0.7;
+      const duration = this.currentDuration * 0.7;
       const startTime = Date.now();
       
       const animate = () => {
@@ -101,6 +121,21 @@ export default {
 </script>
 
 <style scoped>
+/* Новый эффект slide-fade как в вашем примере */
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-fade-leave-active {
+  transition: all 0.8s cubic-bezier(1, 0.5, 0.8, 1);
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
 /* Дополнительные стили для различных типов переходов */
 .page-transition-enter-active,
 .page-transition-leave-active {
@@ -180,6 +215,49 @@ export default {
 
 .rotate-leave-to {
   transform: rotate(180deg) scale(1.2);
+  opacity: 0;
+}
+
+/* Эффект fade */
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Эффект slide-up */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-up-enter-from {
+  transform: translateY(50px);
+  opacity: 0;
+}
+
+.slide-up-leave-to {
+  transform: translateY(-50px);
+  opacity: 0;
+}
+
+/* Эффект slide-down */
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-down-enter-from {
+  transform: translateY(-50px);
+  opacity: 0;
+}
+
+.slide-down-leave-to {
+  transform: translateY(50px);
   opacity: 0;
 }
 </style> 
