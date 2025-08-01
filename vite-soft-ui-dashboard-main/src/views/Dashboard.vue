@@ -4,7 +4,7 @@
       <div class="col-12">
         <div class="card mb-4">
           <div class="card-header pb-0 text-center">
-            <h6>НУЖНО ПРИУМАТЬ НАПОЛНЕНИЕ!!!!</h6>
+            <h6>НУЖНО ПРИДУМАТЬ НАПОЛНЕНИЕ!!!!</h6>
             
           </div>
           <div class="card-body px-0 pt-0 pb-2">
