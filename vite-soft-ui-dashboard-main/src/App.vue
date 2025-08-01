@@ -134,43 +134,6 @@ export default {
   }
 }
 
-/* Стили для эффектов переходов между страницами */
-.page-transition-enter-active,
-.page-transition-leave-active {
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.page-transition-enter-from {
-  opacity: 0;
-  transform: translateY(20px) scale(0.95);
-}
-
-.page-transition-leave-to {
-  opacity: 0;
-  transform: translateY(-10px) scale(0.98);
-}
-
-/* Дополнительные эффекты для разных типов переходов */
-.page-transition-enter-active {
-  transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.page-transition-leave-active {
-  transition-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
-}
-
-/* Эффект для мобильных устройств */
-@media (max-width: 768px) {
-  .page-transition-enter-from {
-    transform: translateX(20px) scale(0.95);
-  }
-  
-  .page-transition-leave-to {
-    transform: translateX(-20px) scale(0.98);
-  }
-}
-
 /* Плавная прокрутка для всего приложения */
 html {
   scroll-behavior: smooth;
