@@ -32,8 +32,8 @@ EXIT;
 
 ### 3. Конфигурация (уже настроена)
 Файл `.env` содержит:
-- ✅ **API Key**: AQVN03jte1fuY8xuSmhqMKEpj4LIDmdj-fuEuQa8
-- ✅ **Folder ID**: b1gdcbsf4iah6nqvmlgb
+- ✅ **API Key**: YOUR_YANDEX_API_KEY_HERE
+- ✅ **Folder ID**: YOUR_FOLDER_ID_HERE
 - ✅ **USE_YANDEX_CLOUD**: true
 - ✅ **YANDEX_FALLBACK_TO_OLLAMA**: false (отключен!)
 
