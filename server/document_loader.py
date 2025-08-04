@@ -9,6 +9,8 @@ from typing import List, Tuple
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
+from yandex_embeddings import create_embeddings
+from config_utils import get_env_bool
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import time
 import concurrent.futures
@@ -25,6 +27,36 @@ TEXT_SPLITTER = RecursiveCharacterTextSplitter(
 )
 # Получение URL для Ollama из переменной окружения или использование значения по умолчанию
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+def get_embedding_function(model_name: str):
+    """
+    Получение функции эмбеддингов в зависимости от конфигурации
+    
+    Args:
+        model_name: Название модели эмбеддингов
+        
+    Returns:
+        Экземпляр Embeddings (Yandex или Ollama)
+    """
+    use_yandex_cloud = get_env_bool("USE_YANDEX_CLOUD", False)
+    
+    if use_yandex_cloud:
+        print(f"Используем YandexEmbeddings с моделью {model_name}")
+        try:
+            return create_embeddings(model=model_name)
+        except Exception as e:
+            print(f"Ошибка создания YandexEmbeddings: {e}")
+            
+            # Fallback на Ollama если включен
+            fallback_enabled = get_env_bool("YANDEX_FALLBACK_TO_OLLAMA", True)
+            if fallback_enabled:
+                print("Переключаемся на Ollama fallback для эмбеддингов")
+                return OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST)
+            else:
+                raise
+    else:
+        print(f"Используем OllamaEmbeddings с моделью {model_name}")
+        return OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST)
 
 def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 20):
     """
@@ -81,7 +113,16 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
                 print(f"Поиск по варианту {i+1}: {q[:30]}...")
                 
                 # Кодируем запрос в вектор
-                query_emb = embedding_model.embed_documents([q])[0]
+                try:
+                    # Используем embed_query для поисковых запросов (более подходящий метод)
+                    if hasattr(embedding_model, 'embed_query'):
+                        query_emb = embedding_model.embed_query(q)
+                    else:
+                        # Fallback для совместимости
+                        query_emb = embedding_model.embed_documents([q])[0]
+                except Exception as embed_error:
+                    print(f"Ошибка создания эмбеддинга для запроса '{q}': {embed_error}")
+                    continue
                 
                 # Оптимизированный поиск - только один быстрый метод
                 try:
@@ -219,7 +260,7 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     if os.path.exists(department_directory) and not reload:
         print(f"Загрузка существующей базы данных Chroma для отдела {department_id}...")
         db = Chroma(
-            embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+            embedding_function=get_embedding_function(model_name),
             persist_directory=department_directory
         )
         return db
@@ -275,7 +316,7 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
         # Если нет документов, создаем пустую базу
         return Chroma.from_documents(
             documents=[],
-            embedding=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+            embedding=get_embedding_function(model_name),
             persist_directory=department_directory
         )
     
@@ -284,7 +325,7 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     if os.path.exists(department_directory):
         try:
             db = Chroma(
-                embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+                embedding_function=get_embedding_function(model_name),
                 persist_directory=department_directory
             )
             # Получаем список файлов, которые уже есть в базе
@@ -316,13 +357,13 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
         # Возвращаем существующую базу данных
         if os.path.exists(department_directory):
             return Chroma(
-                embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+                embedding_function=get_embedding_function(model_name),
                 persist_directory=department_directory
             )
         # Если директории нет, но и новых документов нет - создаем пустую базу
         return Chroma.from_documents(
             documents=[],
-            embedding=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+            embedding=get_embedding_function(model_name),
             persist_directory=department_directory
         )
     
@@ -336,7 +377,7 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     # Если директория существует, добавляем к существующей базе
     if os.path.exists(department_directory):
         db = Chroma(
-            embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+            embedding_function=get_embedding_function(model_name),
             persist_directory=department_directory
         )
         db.add_documents(documents)
@@ -345,7 +386,7 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
         # Иначе создаем новую базу
         return Chroma.from_documents(
             documents=documents,
-            embedding=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+            embedding=get_embedding_function(model_name),
             persist_directory=department_directory
         )
 

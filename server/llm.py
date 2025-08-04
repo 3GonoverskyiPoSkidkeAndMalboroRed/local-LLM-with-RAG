@@ -222,7 +222,7 @@ def getChatChain(llm, db):
 
 
 def getAsyncChatChain(llm, db):
-    """Асинхронная версия для параллельной обработки"""
+    """Асинхронная версия для параллельной обработки с поддержкой Yandex Cloud"""
     # Улучшенные настройки retriever для лучшего качества RAG
     retriever = db.as_retriever(
         search_type="similarity",
@@ -276,8 +276,80 @@ def getAsyncChatChain(llm, db):
             print(f"getAsyncChatChain: обработка вопроса: {question}")
             inputs = {"question": question}
             
-            # Выполняем LLM цепочку асинхронно в отдельном потоке с тайм-аутом
-            result = await _async_chat_invoke(final_chain, inputs, timeout=100)
+            # Проверяем тип LLM для определения способа выполнения
+            from config_utils import get_env_bool
+            use_yandex_cloud = get_env_bool("USE_YANDEX_CLOUD", False)
+            
+            # Определяем, используется ли Yandex Cloud LLM
+            is_yandex_llm = (
+                use_yandex_cloud and 
+                hasattr(llm, '_llm_type') and 
+                'yandex' in str(llm._llm_type).lower()
+            ) or (
+                hasattr(llm, '__class__') and 
+                'yandex' in str(llm.__class__.__name__).lower()
+            )
+            
+            if is_yandex_llm:
+                print(f"getAsyncChatChain: Используем Yandex Cloud LLM")
+                
+                try:
+                    # Для Yandex Cloud LLM используем прямой асинхронный вызов
+                    result = await _async_chat_invoke(final_chain, inputs, timeout=120)  # Увеличенный таймаут для Yandex Cloud
+                    
+                except Exception as yandex_error:
+                    print(f"getAsyncChatChain: Ошибка Yandex Cloud LLM: {yandex_error}")
+                    
+                    # Проверяем, включен ли fallback
+                    fallback_enabled = get_env_bool("YANDEX_FALLBACK_TO_OLLAMA", True)
+                    
+                    if fallback_enabled:
+                        print(f"getAsyncChatChain: Попытка fallback на Ollama")
+                        
+                        # Создаем fallback Ollama LLM
+                        try:
+                            from langchain_ollama import ChatOllama
+                            ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+                            
+                            fallback_llm = ChatOllama(
+                                model="gemma3",  # Дефолтная модель для fallback
+                                base_url=ollama_host,
+                                temperature=0.1,
+                                num_predict=200
+                            )
+                            
+                            # Пересоздаем цепочку с fallback LLM
+                            fallback_standalone_question = {
+                                "standalone_question": {
+                                    "question": lambda x: x["question"],
+                                    "chat_history": lambda x: get_buffer_string(x["chat_history"]),
+                                }
+                                | CONDENSE_QUESTION_PROMPT
+                                | fallback_llm
+                                | (lambda x: x.content if hasattr(x, "content") else x)
+                            }
+                            
+                            fallback_answer = {
+                                "answer": final_inputs
+                                | ANSWER_PROMPT
+                                | fallback_llm,
+                                "docs": itemgetter("docs"),
+                            }
+                            
+                            fallback_chain = loaded_memory | fallback_standalone_question | retrieved_documents | fallback_answer
+                            
+                            print(f"getAsyncChatChain: Выполняем fallback на Ollama")
+                            result = await _async_chat_invoke(fallback_chain, inputs, timeout=100)
+                            
+                        except Exception as fallback_error:
+                            print(f"getAsyncChatChain: Ошибка fallback: {fallback_error}")
+                            raise yandex_error  # Возвращаем оригинальную ошибку Yandex
+                    else:
+                        raise yandex_error
+            else:
+                print(f"getAsyncChatChain: Используем стандартную LLM (Ollama)")
+                # Выполняем LLM цепочку асинхронно в отдельном потоке с тайм-аутом
+                result = await _async_chat_invoke(final_chain, inputs, timeout=100)
             
             if "answer" not in result:
                 print("getAsyncChatChain: ключ 'answer' отсутствует в результате")
@@ -317,8 +389,14 @@ def getAsyncChatChain(llm, db):
             import traceback
             print(f"getAsyncChatChain: ошибка при обработке вопроса: {str(e)}")
             print(traceback.format_exc())
+            
+            # Специфичная обработка ошибок Yandex Cloud
+            error_message = f"Произошла ошибка при обработке запроса: {str(e)}"
+            if "yandex" in str(e).lower() or "api" in str(e).lower():
+                error_message = f"Ошибка Yandex Cloud API: {str(e)}"
+            
             return {
-                "answer": f"Произошла ошибка при обработке запроса: {str(e)}",
+                "answer": error_message,
                 "chunks": [],
                 "files": [],
                 "success": False
