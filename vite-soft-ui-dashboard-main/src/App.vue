@@ -24,12 +24,7 @@
       :text-white="$store.state.isAbsolute ? 'text-white opacity-8' : ''"
       :min-nav="navbarMinimize"
     />
-    
-    <!-- Эффект перехода между страницами -->
-    <PageTransition>
-      <router-view :key="$route.fullPath" />
-    </PageTransition>
-    
+    <router-view />
     <app-footer v-show="$store.state.showFooter" />
     <!-- <configurator
       :toggle="toggleConfigurator"
@@ -39,17 +34,12 @@
       ]"
     /> -->
   </main>
-  
-  <!-- Индикатор загрузки при переходах -->
-  <LoadingSpinner :is-loading="isPageLoading" />
 </template>
 <script>
 import Sidenav from "./examples/Sidenav/index.vue";
 import Configurator from "@/examples/Configurator.vue";
 import Navbar from "@/examples/Navbars/Navbar.vue";
 import AppFooter from "@/examples/Footer.vue";
-import LoadingSpinner from "@/components/LoadingSpinner.vue";
-import PageTransition from "@/components/PageTransition.vue";
 import { mapMutations, mapActions } from "vuex";
 
 export default {
@@ -59,8 +49,6 @@ export default {
     Configurator,
     Navbar,
     AppFooter,
-    LoadingSpinner,
-    PageTransition,
   },
 
   computed: {
@@ -79,23 +67,10 @@ export default {
   },
   created() {
     this.restoreAuthentication();
-    // Добавляем обработчики событий роутера для управления загрузкой
-    this.$router.beforeEach((to, from, next) => {
-      this.isPageLoading = true;
-      next();
-    });
-    
-    this.$router.afterEach(() => {
-      // Небольшая задержка для плавности
-      setTimeout(() => {
-        this.isPageLoading = false;
-      }, 200);
-    });
   },
   data() {
     return {
       sidenavMobileOpen: false,
-      isPageLoading: false,
     };
   },
   methods: {
@@ -132,62 +107,5 @@ export default {
     margin-left: 260px; /* ширина сайдбара */
     transition: margin-left 0.3s;
   }
-}
-
-/* Стили для эффектов переходов между страницами */
-.page-transition-enter-active,
-.page-transition-leave-active {
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.page-transition-enter-from {
-  opacity: 0;
-  transform: translateY(20px) scale(0.95);
-}
-
-.page-transition-leave-to {
-  opacity: 0;
-  transform: translateY(-10px) scale(0.98);
-}
-
-/* Дополнительные эффекты для разных типов переходов */
-.page-transition-enter-active {
-  transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.page-transition-leave-active {
-  transition-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
-}
-
-/* Эффект для мобильных устройств */
-@media (max-width: 768px) {
-  .page-transition-enter-from {
-    transform: translateX(20px) scale(0.95);
-  }
-  
-  .page-transition-leave-to {
-    transform: translateX(-20px) scale(0.98);
-  }
-}
-
-/* Плавная прокрутка для всего приложения */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Улучшенные переходы для интерактивных элементов */
-.btn, .card, .form-control {
-  transition: all 0.2s ease-in-out;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
 }
 </style>
