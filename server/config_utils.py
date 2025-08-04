@@ -77,12 +77,12 @@ class YandexCloudConfig:
     
     # Настройки кэширования
     enable_caching: bool = True
-    cache_dir: str = "/app/files/cache"
+    cache_dir: str = "files/cache"
     cache_ttl_hours: int = 24
     
     # Настройки мониторинга
     enable_metrics: bool = True
-    metrics_file: str = "/app/files/yandex_metrics.json"
+    metrics_file: str = "files/yandex_metrics.json"
     enable_performance_monitoring: bool = True
     
     # Настройки fallback
@@ -285,10 +285,10 @@ class YandexCloudConfig:
                 max_requests_per_minute=get_env_int("YANDEX_MAX_REQUESTS_PER_MINUTE", 60, min_value=1),
                 max_concurrent_requests=get_env_int("YANDEX_MAX_CONCURRENT", 10, min_value=1),
                 enable_caching=get_env_bool("YANDEX_ENABLE_CACHING", True),
-                cache_dir=get_env_var("YANDEX_CACHE_DIR", "/app/files/cache"),
+                cache_dir=get_env_var("YANDEX_CACHE_DIR", "files/cache"),
                 cache_ttl_hours=get_env_int("YANDEX_CACHE_TTL_HOURS", 24, min_value=1),
                 enable_metrics=get_env_bool("YANDEX_ENABLE_METRICS", True),
-                metrics_file=get_env_var("YANDEX_METRICS_FILE", "/app/files/yandex_metrics.json"),
+                metrics_file=get_env_var("YANDEX_METRICS_FILE", "files/yandex_metrics.json"),
                 enable_performance_monitoring=get_env_bool("YANDEX_ENABLE_PERFORMANCE_MONITORING", True),
                 enable_fallback=get_env_bool("YANDEX_FALLBACK_TO_OLLAMA", True),
                 fallback_provider=get_env_var("YANDEX_FALLBACK_PROVIDER", "ollama"),

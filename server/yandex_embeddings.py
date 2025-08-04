@@ -413,15 +413,16 @@ def create_embeddings(
     **kwargs
 ) -> Embeddings:
     """
-    Автоматический выбор между YandexEmbeddings и OllamaEmbeddings
+    Создание эмбеддингов только через Yandex Cloud.
+    Ollama fallback отключен для полного использования Yandex API.
     
     Args:
-        model: Модель эмбеддингов
-        base_url: URL для Ollama (игнорируется для Yandex)
+        model: Модель эмбеддингов Yandex Cloud
+        base_url: Игнорируется (для совместимости)
         **kwargs: Дополнительные параметры
         
     Returns:
-        Экземпляр Embeddings (Yandex или Ollama)
+        Экземпляр YandexEmbeddings
     """
     use_yandex_cloud = get_env_bool("USE_YANDEX_CLOUD", False)
     
@@ -429,10 +430,10 @@ def create_embeddings(
         logger.info(f"Используем YandexEmbeddings с моделью {model}")
         return create_yandex_embeddings(model=model, **kwargs)
     else:
-        logger.info(f"Используем OllamaEmbeddings с моделью {model}")
-        from langchain_ollama import OllamaEmbeddings
-        ollama_host = base_url or get_env_var("OLLAMA_HOST", "http://localhost:11434")
-        return OllamaEmbeddings(model=model, base_url=ollama_host)
+        raise ValueError(
+            "❌ Yandex Cloud отключен! Для работы RAG функционала установите USE_YANDEX_CLOUD=true. "
+            "Ollama fallback отключен для обеспечения полного использования Yandex API."
+        )
 
 # Глобальный экземпляр для кэширования
 _global_embeddings_cache: Dict[str, YandexEmbeddings] = {}

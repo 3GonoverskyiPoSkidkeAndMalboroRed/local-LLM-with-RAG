@@ -602,13 +602,13 @@ def get_cache() -> YandexCache:
                     config = get_runtime_config()
                     yandex_config = config.get('yandex_cloud', {})
                     
-                    cache_dir = yandex_config.get('cache_dir', '/app/files/cache')
+                    cache_dir = yandex_config.get('cache_dir', 'files/cache')
                     # Предполагаем максимальный размер кэша 1GB по умолчанию
                     max_size_mb = 1000
                     
                 except Exception as e:
                     logger.warning(f"Не удалось получить конфигурацию кэша: {e}")
-                    cache_dir = '/app/files/cache'
+                    cache_dir = 'files/cache'
                     max_size_mb = 1000
                 
                 _global_cache = YandexCache(cache_dir, max_size_mb)

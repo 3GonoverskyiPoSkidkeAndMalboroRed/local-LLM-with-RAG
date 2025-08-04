@@ -1,0 +1,46 @@
+{
+  "53874c477c7c802f970d9b9ab5e40910": {
+    "created_at": "2025-08-04T14:30:20.101972",
+    "expires_at": "2025-08-05T14:30:20.101963",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 17,
+      "embedding_dim": 256
+    }
+  },
+  "f7f8d783c923b4064da91f48ae7df90e": {
+    "created_at": "2025-08-04T14:30:20.102385",
+    "expires_at": "2025-08-05T14:30:20.102382",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 17,
+      "embedding_dim": 256
+    }
+  },
+  "d09aa59be785ac4baf88776f8d739ad6": {
+    "created_at": "2025-08-04T14:30:20.102605",
+    "expires_at": "2025-08-05T14:30:20.102603",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 23,
+      "embedding_dim": 256
+    }
+  },
+  "ff88bd98083ebcad2a4fbf8e2f774db5": {
+    "created_at": "2025-08-04T14:30:20.103718",
+    "expires_at": "2025-08-05T14:30:20.103715",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 13,
+      "embedding_dim": 256
+    }
+  }
+}

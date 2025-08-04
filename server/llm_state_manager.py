@@ -11,14 +11,16 @@ import threading
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from datetime import datetime
-from langchain_ollama import ChatOllama, OllamaEmbeddings
+# Ollama импорты удалены - используем только Yandex Cloud
 from langchain_community.vectorstores import Chroma
 
 from document_loader import load_documents_into_database
 from llm import getChatChain, getAsyncChatChain
+from yandex_llm import create_compatible_llm
+from yandex_embeddings import create_embeddings
+from config_utils import get_env_bool
 
-# Получение URL для Ollama из переменной окружения
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# Ollama больше не используется - только Yandex Cloud
 
 @dataclass
 class QueryTask:
@@ -80,30 +82,43 @@ class LLMStateManager:
         print("DEBUG: LLMStateManager успешно инициализирован")
     
     def check_if_model_is_available(self, model_name: str) -> bool:
-        """Проверяет доступность модели"""
-        available_models = [
-            "gemma3",
-            "nomic-embed-text",
-            "ilyagusev/saiga_llama3:latest",
-            "snowflake-arctic-embed2:latest",
-        ]
+        """Проверяет доступность модели только для Yandex Cloud"""
+        use_yandex_cloud = get_env_bool("USE_YANDEX_CLOUD", False)
         
-        if model_name not in available_models:
-            raise ValueError(f"Модель '{model_name}' недоступна. Доступные модели: {', '.join(available_models)}")
+        if not use_yandex_cloud:
+            raise ValueError(
+                "❌ Yandex Cloud отключен! Для работы RAG функционала установите USE_YANDEX_CLOUD=true. "
+                "Ollama fallback отключен для обеспечения полного использования Yandex API."
+            )
+        
+        # Доступные модели Yandex Cloud
+        yandex_llm_models = ["yandexgpt", "yandexgpt-lite"]
+        yandex_embedding_models = ["text-search-doc", "text-search-query"]
+        all_yandex_models = yandex_llm_models + yandex_embedding_models
+        
+        if model_name not in all_yandex_models:
+            raise ValueError(
+                f"Модель '{model_name}' недоступна в Yandex Cloud. "
+                f"Доступные LLM модели: {', '.join(yandex_llm_models)}. "
+                f"Доступные Embedding модели: {', '.join(yandex_embedding_models)}"
+            )
         
         return True
     
     def get_available_models(self) -> Dict[str, list]:
-        """Возвращает список доступных моделей"""
+        """Возвращает список доступных моделей только для Yandex Cloud"""
+        use_yandex_cloud = get_env_bool("USE_YANDEX_CLOUD", False)
+        
+        if not use_yandex_cloud:
+            return {
+                "error": "Yandex Cloud отключен. Установите USE_YANDEX_CLOUD=true",
+                "llm_models": [],
+                "embedding_models": []
+            }
+        
         return {
-            "llm_models": [
-                "gemma3",
-                "ilyagusev/saiga_llama3:latest",
-            ],
-            "embedding_models": [
-                "nomic-embed-text",
-                "snowflake-arctic-embed2:latest",
-            ]
+            "llm_models": ["yandexgpt", "yandexgpt-lite"],
+            "embedding_models": ["text-search-doc", "text-search-query"]
         }
     
     def initialize_llm(self, llm_model_name: str, embedding_model_name: str, 
@@ -155,10 +170,9 @@ class LLMStateManager:
                 # Сохраняем базу данных для этого отдела
                 self.department_databases[department_id] = department_db
                 
-                # Инициализируем модель встраивания для векторного поиска
-                embedding_model = OllamaEmbeddings(
-                    model=embedding_model_name, base_url=OLLAMA_HOST
-                )
+                # Инициализируем модель встраивания для векторного поиска через Yandex Cloud
+                print(f"Создание Yandex эмбеддингов с моделью {embedding_model_name}...")
+                embedding_model = create_embeddings(model=embedding_model_name)
                 self.department_embedding_models[department_id] = embedding_model
                 
                 # Создаем семафор для отдела, если его еще нет  
@@ -179,18 +193,16 @@ class LLMStateManager:
             return False
 
         try:
-            print("Создание LLM...")
-            llm = ChatOllama(
-                model=llm_model_name, 
-                base_url=OLLAMA_HOST,
-                temperature=0.05,  # Минимальная креативность = максимальная скорость
-                num_predict=256,  # Еще меньше токенов = быстрее генерация
-                top_k=5,  # Минимум вариантов = максимум скорости
-                top_p=0.8,  # Более строгая фокусировка
-                repeat_penalty=1.1,  # Избегаем повторений
-                num_thread=8,  # Используем больше потоков CPU
-                num_batch=1  # Минимальный batch для скорости
+            print("Создание Yandex LLM...")
+            # Используем только Yandex Cloud LLM
+            from yandex_llm import create_compatible_llm
+            
+            llm = create_compatible_llm(
+                model=llm_model_name,
+                temperature=0.1,  # Оптимальная температура для Yandex
+                max_tokens=2000   # Максимум токенов для качественного ответа
             )
+            
             department_chat = getChatChain(llm, self.department_databases[department_id])
             department_async_chat = getAsyncChatChain(llm, self.department_databases[department_id])
             
@@ -199,9 +211,9 @@ class LLMStateManager:
                 self.department_chats[department_id] = department_chat
                 self.department_async_chats[department_id] = department_async_chat
             
-            print(f"LLM для отдела {department_id} успешно инициализирован.")
+            print(f"Yandex LLM для отдела {department_id} успешно инициализирован.")
         except Exception as e:
-            print(f"Ошибка при создании LLM: {e}")
+            print(f"Ошибка при создании Yandex LLM: {e}")
             return False
 
         return True
@@ -269,7 +281,7 @@ class LLMStateManager:
         with self.global_lock:
             return self.department_databases.get(department_id)
     
-    def get_department_embedding_model(self, department_id: str) -> Optional[OllamaEmbeddings]:
+    def get_department_embedding_model(self, department_id: str) -> Optional[Any]:
         """Получает модель встраивания для отдела"""
         with self.global_lock:
             return self.department_embedding_models.get(department_id)

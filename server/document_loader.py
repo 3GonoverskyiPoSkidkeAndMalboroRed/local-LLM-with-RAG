@@ -16,8 +16,8 @@ import time
 import concurrent.futures
 import threading
 
-# Изменяем директорию для хранения данных на /app/files/storage
-PERSIST_DIRECTORY = "/app/files/storage"
+# Изменяем директорию для хранения данных на files/storage
+PERSIST_DIRECTORY = "files/storage"
 # Улучшенные параметры для лучшего качества RAG
 TEXT_SPLITTER = RecursiveCharacterTextSplitter(
     chunk_size=1500,  # Увеличиваем размер чанка для лучшего контекста
@@ -30,33 +30,25 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 def get_embedding_function(model_name: str):
     """
-    Получение функции эмбеддингов в зависимости от конфигурации
+    Получение функции эмбеддингов только через Yandex Cloud.
+    Ollama fallback отключен для полного использования Yandex API.
     
     Args:
         model_name: Название модели эмбеддингов
         
     Returns:
-        Экземпляр Embeddings (Yandex или Ollama)
+        Экземпляр YandexEmbeddings
     """
     use_yandex_cloud = get_env_bool("USE_YANDEX_CLOUD", False)
     
     if use_yandex_cloud:
         print(f"Используем YandexEmbeddings с моделью {model_name}")
-        try:
-            return create_embeddings(model=model_name)
-        except Exception as e:
-            print(f"Ошибка создания YandexEmbeddings: {e}")
-            
-            # Fallback на Ollama если включен
-            fallback_enabled = get_env_bool("YANDEX_FALLBACK_TO_OLLAMA", True)
-            if fallback_enabled:
-                print("Переключаемся на Ollama fallback для эмбеддингов")
-                return OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST)
-            else:
-                raise
+        return create_embeddings(model=model_name)
     else:
-        print(f"Используем OllamaEmbeddings с моделью {model_name}")
-        return OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST)
+        raise ValueError(
+            "❌ Yandex Cloud отключен! Для работы RAG функционала установите USE_YANDEX_CLOUD=true. "
+            "Ollama fallback отключен для обеспечения полного использования Yandex API."
+        )
 
 def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 20):
     """
@@ -234,7 +226,7 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     print(f"DEBUG: model_name={model_name}, documents_path={documents_path}, department_id={department_id}, reload={reload}")
     
     # ВСЕГДА создаем директорию ContentForDepartment для отдела, если она не существует
-    content_department_path = f"/app/files/ContentForDepartment/{department_id}"
+    content_department_path = f"files/ContentForDepartment/{department_id}"
     if not os.path.exists(content_department_path):
         print(f"Создаем директорию для документов отдела {department_id}: {content_department_path}")
         os.makedirs(content_department_path, exist_ok=True)
@@ -270,18 +262,18 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     
     # Автоматически формируем путь на основе ID отдела
     print(f"DEBUG: Исходный documents_path: {documents_path}")
-    if not documents_path.startswith('/app/files/'):
+    if not documents_path.startswith('files/'):
         # Если передан просто ID отдела или название, формируем полный путь
         if documents_path.isdigit():
             # Если передан только ID отдела, используем стандартную структуру
-            documents_path = f"/app/files/ContentForDepartment/{documents_path}"
+            documents_path = f"files/ContentForDepartment/{documents_path}"
             print(f"DEBUG: Сформирован путь для отдела: {documents_path}")
         else:
             # Если передан путь, добавляем префикс
-            documents_path = f"/app/files/{documents_path}"
+            documents_path = f"files/{documents_path}"
             print(f"DEBUG: Добавлен префикс к пути: {documents_path}")
     else:
-        print(f"DEBUG: Путь уже содержит /app/files/: {documents_path}")
+        print(f"DEBUG: Путь уже содержит files/: {documents_path}")
     
     # Проверяем существование пути к документам
     if not os.path.exists(documents_path):
