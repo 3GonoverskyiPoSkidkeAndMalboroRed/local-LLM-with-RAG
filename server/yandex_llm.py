@@ -22,6 +22,12 @@ class YandexGPT(LLM):
     Совместим с существующим кодом, использующим ChatOllama
     """
     
+    model: str = "yandexgpt"
+    temperature: float = 0.1
+    max_tokens: int = 2000
+    timeout: int = 30
+    _adapter: Optional[YandexCloudAdapter] = None
+    
     def __init__(
         self,
         model: str = "yandexgpt",
@@ -30,12 +36,8 @@ class YandexGPT(LLM):
         timeout: int = 30,
         **kwargs
     ):
-        super().__init__(**kwargs)
-        self.model = model
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.timeout = timeout
-        self._adapter: Optional[YandexCloudAdapter] = None
+        super().__init__(model=model, temperature=temperature, max_tokens=max_tokens, timeout=timeout, **kwargs)
+        self._adapter = None
     
     @property
     def _llm_type(self) -> str:
@@ -196,6 +198,12 @@ class YandexChatModel(BaseChatModel):
     Поддерживает диалоговый интерфейс с сообщениями
     """
     
+    model: str = "yandexgpt"
+    temperature: float = 0.1
+    max_tokens: int = 2000
+    timeout: int = 30
+    _adapter: Optional[YandexCloudAdapter] = None
+    
     def __init__(
         self,
         model: str = "yandexgpt",
@@ -204,12 +212,8 @@ class YandexChatModel(BaseChatModel):
         timeout: int = 30,
         **kwargs
     ):
-        super().__init__(**kwargs)
-        self.model = model
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.timeout = timeout
-        self._adapter: Optional[YandexCloudAdapter] = None
+        super().__init__(model=model, temperature=temperature, max_tokens=max_tokens, timeout=timeout, **kwargs)
+        self._adapter = None
     
     @property
     def _llm_type(self) -> str:
@@ -400,4 +404,4 @@ def create_compatible_llm(
         temperature=temperature,
         max_tokens=max_tokens,
         **kwargs
-    )
+    ) 

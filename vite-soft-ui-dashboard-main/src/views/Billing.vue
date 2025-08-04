@@ -336,10 +336,12 @@ export default {
             };
           }
         } else {
-          // Используем эндпоинт /generate для простого чата
-          response = await axios.post(`${import.meta.env.VITE_API_URL}/llm/generate`, {
-            messages: message,
-            department_id: departmentId // Добавляем department_id в запрос
+          // Используем эндпоинт /api/yandex/generate для простого чата
+          response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex/generate`, {
+            prompt: message,
+            model: "yandexgpt",
+            temperature: 0.1,
+            max_tokens: 2000
           }, {
             // Отключаем автоматические повторные попытки для запросов к LLM
             noRetry: true

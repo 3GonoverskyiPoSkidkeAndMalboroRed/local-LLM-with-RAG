@@ -477,13 +477,13 @@ async def generate(request: GenerateRequest):
             
             try:
                 from yandex_cloud_adapter import get_yandex_adapter
-                from yandex_llm import create_compatible_llm
                 
-                # Создаем совместимую модель Yandex Cloud
-                yandex_llm = create_compatible_llm(
+                # Создаем модель Yandex Cloud напрямую
+                from yandex_llm import create_yandex_llm
+                yandex_llm = create_yandex_llm(
                     model=request.model,
                     temperature=getattr(request, 'temperature', 0.1),
-                    num_predict=getattr(request, 'max_tokens', 2000)
+                    max_tokens=getattr(request, 'max_tokens', 2000)
                 )
                 
                 # Генерируем ответ асинхронно

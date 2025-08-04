@@ -1,0 +1,50 @@
+# Yandex Cloud Configuration
+# Обязательные переменные
+YANDEX_API_KEY=your_yandex_api_key_here
+YANDEX_FOLDER_ID=your_folder_id_here
+
+# Основные настройки
+USE_YANDEX_CLOUD=true
+YANDEX_LLM_MODEL=yandexgpt
+YANDEX_EMBEDDING_MODEL=text-search-doc
+
+# API настройки
+YANDEX_BASE_URL=https://llm.api.cloud.yandex.net
+YANDEX_TIMEOUT=30
+YANDEX_MAX_TOKENS=2000
+YANDEX_TEMPERATURE=0.1
+
+# Retry и обработка ошибок
+YANDEX_MAX_RETRIES=3
+YANDEX_RETRY_DELAY=1.0
+YANDEX_FALLBACK_TO_OLLAMA=true
+
+# Лимиты и производительность
+YANDEX_MAX_REQUESTS_PER_MINUTE=60
+YANDEX_MAX_CONCURRENT=10
+YANDEX_FALLBACK_TIMEOUT=60
+
+# Кэширование
+YANDEX_ENABLE_CACHING=true
+YANDEX_CACHE_DIR=/app/files/cache
+YANDEX_CACHE_TTL_HOURS=24
+YANDEX_EMBEDDINGS_CACHE_DIR=/app/files/embeddings_cache
+
+# Мониторинг и метрики
+YANDEX_ENABLE_METRICS=true
+YANDEX_METRICS_FILE=/app/files/yandex_metrics.json
+YANDEX_ENABLE_PERFORMANCE_MONITORING=true
+
+# Ollama Configuration (Fallback)
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_TIMEOUT=60
+OLLAMA_MAX_RETRIES=3
+OLLAMA_LLM_MODEL=gemma3
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+
+# Database Configuration
+DATABASE_URL=mysql+mysqlconnector://root:123123@localhost:3306/db_test
+DB_POOL_SIZE=10
+DB_MAX_OVERFLOW=20
+DB_POOL_TIMEOUT=30
+DB_POOL_RECYCLE=3600 
