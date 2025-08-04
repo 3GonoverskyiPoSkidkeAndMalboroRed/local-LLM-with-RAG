@@ -17,7 +17,6 @@ import store from "./store";
 import router from "./router";
 import "./assets/css/nucleo-icons.css";
 import "./assets/css/nucleo-svg.css";
-import "./assets/css/animations.css";
 import SoftUIDashboard from "./soft-ui-dashboard";
 
 // Подключаем ваш custom.css ПОСЛЕ SoftUIDashboard для большего приоритета
