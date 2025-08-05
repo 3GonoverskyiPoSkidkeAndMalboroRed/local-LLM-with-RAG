@@ -1,6 +1,7 @@
 <template>
-  <div class="card mb-4">
-    <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+  <div>
+    <div class="card mb-4">
+      <div class="card-header pb-0 d-flex justify-content-between align-items-center">
       <h6>Таблица контента {{ isAdmin ? '(Режим администратора)' : '' }}</h6>
       <span v-if="isAdmin" class="badge bg-gradient-success">Администратор</span>
     </div>
@@ -48,19 +49,30 @@
               </td>
               <td class="align-middle text-center">
                 <div class="d-flex justify-content-center">
+                  <button
+                    v-if="isDocumentFormat(getFileExtension(content.file_path))"
+                    @click="viewDocument(content)"
+                    class="btn btn-sm btn-outline-primary me-2"
+                    title="Просмотреть документ"
+                  >
+                    <i class="fas fa-eye me-1"></i>Просмотр
+                  </button>
                   <a
                     :href="getDownloadLink(content.id)"
-                    class="text-secondary font-weight-bold text-xs me-3"
-                    data-toggle="tooltip"
-                    data-original-title="Скачать файл"
-                  >Скачать</a>
+                    class="btn btn-sm btn-outline-secondary me-2"
+                    title="Скачать файл"
+                  >
+                    <i class="fas fa-download me-1"></i>Скачать
+                  </a>
                   <a
+                    v-if="isAdmin"
                     href="#"
-                    class="text-danger font-weight-bold text-xs"
-                    data-toggle="tooltip"
-                    data-original-title="Удалить контент"
+                    class="btn btn-sm btn-outline-danger"
+                    title="Удалить контент"
                     @click.prevent="deleteContent(content.id)"
-                  >Удалить</a>
+                  >
+                    <i class="fas fa-trash me-1"></i>Удалить
+                  </a>
                 </div>
               </td>
             </tr>
@@ -72,6 +84,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   </div>
 </template>
@@ -163,6 +176,22 @@ export default {
           alert('Произошла ошибка при удалении контента');
         }
       }
+    },
+    
+    // Получение расширения файла
+    getFileExtension(filePath) {
+      return filePath.toLowerCase().split('.').pop();
+    },
+    
+    // Проверка, является ли файл документом для просмотра
+    isDocumentFormat(extension) {
+      return ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf'].includes(extension);
+    },
+    
+    // Просмотр документа через Google Docs Viewer
+    viewDocument(content) {
+      const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer/${content.id}`;
+      window.open(viewerUrl, '_blank');
     }
   }
 };

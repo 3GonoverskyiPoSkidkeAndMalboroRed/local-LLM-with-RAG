@@ -133,11 +133,13 @@
         </div>
       </div>
     </div>
+    
+
   </div>
 </template>
 
 <script>
-import axios from 'axios';
+import axiosInstance from '@/utils/axiosConfig';
 import { Modal, Toast } from 'bootstrap';
 
 export default {
@@ -203,11 +205,11 @@ export default {
         let response;
         if (this.tagId === 'untagged') {
           // Получаем документы без тега
-          response = await axios.get(`${import.meta.env.VITE_API_URL}/user/${this.userId}/content/untagged`);
+          response = await axiosInstance.get(`/user/${this.userId}/content/untagged`);
           this.documents = response.data;
         } else {
           // Получаем документы по ID тега с использованием нового эндпоинта
-          response = await axios.get(`${import.meta.env.VITE_API_URL}/content/user/${this.userId}/content/by-tags/${this.tagId}`);
+          response = await axiosInstance.get(`/content/user/${this.userId}/content/by-tags/${this.tagId}`);
           this.documents = response.data;
           console.log('Получены документы по тегу:', this.documents);
         }
@@ -244,7 +246,7 @@ export default {
       // Проверяем, является ли файл аудио или видео
       if (this.isAudio(fileExtension) || this.isVideo(fileExtension)) {
         // Настраиваем модальное окно для медиа файла
-        this.currentMediaUrl = `${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`;
+        this.currentMediaUrl = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
         this.currentMediaTitle = doc.title || this.getFileName(doc.file_path);
         
         // Устанавливаем тип медиа
@@ -261,22 +263,23 @@ export default {
         // Открываем модальное окно
         this.mediaPlayerModal.show();
       } else {
-        // Для других типов файлов открываем в новой вкладке
-        window.open(`${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`, '_blank');
+        // Для всех остальных файлов используем Google Docs Viewer
+        const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
+        window.open(viewerUrl, '_blank');
       }
     },
     async downloadDocument(doc) {
       try {
         // Скачивание документа
-        window.location.href = `${import.meta.env.VITE_API_URL}/content/download-file/${doc.id}`;
+        window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
       } catch (error) {
         console.error("Ошибка при скачивании документа:", error);
       }
     },
     copyLink(docId, action) {
       const url = action === 'view' 
-        ? `${import.meta.env.VITE_API_URL}/content/view-file/${docId}` 
-        : `${import.meta.env.VITE_API_URL}/content/download-file/${docId}`;
+        ? `${axiosInstance.defaults.baseURL}/content/document-viewer/${docId}` 
+        : `${axiosInstance.defaults.baseURL}/content/download-file/${docId}`;
       
       if (navigator.clipboard) {
         navigator.clipboard.writeText(url).then(() => {

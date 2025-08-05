@@ -69,7 +69,10 @@ class LLMStateManager:
         self.all_tasks = {}  # Все задачи (включая завершенные)
         
         # Настройки - ОПТИМИЗАЦИЯ скорости с сохранением стабильности  
-        self.max_concurrent_requests_per_department = 3  # 3 запроса после оптимизации
+        self.max_concurrent_requests_per_department = 1  # Только 1 запрос одновременно
+        self.model_switch_delay = 2.0  # 2 секунды между переключениями моделей
+        self.retry_attempts = 3  # Количество попыток при сбое
+        self.health_check_interval = 30  # Проверка здоровья каждые 30 секунд
         
         # Глобальная блокировка для thread-safety
         self.global_lock = threading.Lock()
@@ -108,6 +111,23 @@ class LLMStateManager:
         """Инициализирует LLM для указанного отдела"""
         print(f"DEBUG: initialize_llm вызван для отдела {department_id}, id менеджера: {id(self)}")
         print(f"Инициализация LLM для отдела {department_id}...")
+        
+        # ВСЕГДА создаем директорию ContentForDepartment для отдела, если она не существует
+        # Это должно происходить ДО всех проверок инициализации
+        content_department_path = f"/app/files/ContentForDepartment/{department_id}"
+        print(f"DEBUG: Проверяем существование директории: {content_department_path}")
+        if not os.path.exists(content_department_path):
+            print(f"Создаем директорию для документов отдела {department_id}: {content_department_path}")
+            os.makedirs(content_department_path, exist_ok=True)
+            
+            # Если директория пуста, создаем пустой файл README.md
+            if not os.listdir(content_department_path):
+                readme_path = os.path.join(content_department_path, "README.md")
+                with open(readme_path, 'w') as f:
+                    f.write("# Директория для документов\n\nЭта директория создана для хранения документов для RAG.")
+                print(f"Создан файл README.md в {content_department_path}")
+        else:
+            print(f"Директория для документов отдела {department_id} уже существует: {content_department_path}")
         
         # Проверяем, не был ли отдел уже инициализирован
         if not reload and self.is_department_initialized(department_id):
@@ -477,6 +497,23 @@ class LLMStateManager:
                     stuck_tasks[department_id] = department_stuck
         
         return stuck_tasks
+
+    async def check_model_health(self, department_id: str) -> bool:
+        """Проверяет доступность модели"""
+        try:
+            chat_instance = self.get_department_async_chat(department_id)
+            if not chat_instance:
+                return False
+            
+            # Простой тестовый запрос
+            test_result = await asyncio.wait_for(
+                chat_instance("test"),
+                timeout=10
+            )
+            return test_result.get("success", False)
+        except Exception as e:
+            print(f"Ошибка проверки здоровья модели для отдела {department_id}: {e}")
+            return False
 
 # Получаем единственный экземпляр менеджера состояния через функцию
 llm_state_manager = get_llm_state_manager() 

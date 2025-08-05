@@ -65,11 +65,13 @@
         </div>
       </div>
     </div>
+    
+
   </div>
 </template>
 
 <script>
-import axios from 'axios';
+import axiosInstance from '@/utils/axiosConfig';
 
 export default {
   name: "LibraryPage",
@@ -97,7 +99,7 @@ export default {
     async fetchContentByTags() {
       try {
         this.loading = true;
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/user/${this.userId}/content/by-tags`);
+        const response = await axiosInstance.get(`/user/${this.userId}/content/by-tags`);
         this.contentData = response.data;
         this.loading = false;
       } catch (error) {
@@ -109,7 +111,7 @@ export default {
     async searchDocuments() {
       if (this.searchQuery.length > 0) {
         try {
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/content/search-documents?user_id=${this.userId}&search_query=${this.searchQuery}`);
+          const response = await axiosInstance.get(`/content/search-documents?user_id=${this.userId}&search_query=${this.searchQuery}`);
           this.documents = response.data.documents;
         } catch (error) {
           console.error("Ошибка при поиске документов:", error);
@@ -129,12 +131,13 @@ export default {
       });
     },
     viewDocument(doc) {
-      // Открываем документ для просмотра
-      window.open(`${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`, '_blank');
+      // Используем Google Docs Viewer для всех поддерживаемых форматов
+      const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
+      window.open(viewerUrl, '_blank');
     },
     downloadDocument(doc) {
       // Скачиваем документ
-      window.location.href = `${import.meta.env.VITE_API_URL}/content/download-file/${doc.id}`;
+      window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
     }
   }
 };

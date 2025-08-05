@@ -92,7 +92,7 @@ a:hover {
 
 a:focus {
   color: var(--accent-color);
-  outline: 2px solid rgba(60, 100, 152, 0.5);
+
   outline-offset: 2px;
 }
 
@@ -130,9 +130,7 @@ a:focus {
   color: var(--primary-color);
 }
 
-.nav-link.active {
-  color: var(--accent-color);
-}
+
 
 /* ТАБЛИЦЫ */
 .table tbody tr:hover {

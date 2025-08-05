@@ -4,7 +4,7 @@
       <div class="col-12">
         <div class="card mb-4">
           <div class="card-header pb-0 text-center">
-            <h6>НУЖНО ПРИУМАТЬ НАПОЛНЕНИЕ!!!!</h6>
+            <h6>НУЖНО ПРИДУМАТЬ НАПОЛНЕНИЕ!!!!</h6>
             
           </div>
           <div class="card-body px-0 pt-0 pb-2">
@@ -58,18 +58,17 @@
         </router-link>
       </div>
     </div>
+    
+
   </div>
 </template>
 
 <script>
-import axios from 'axios';
+import axiosInstance from '@/utils/axiosConfig';
 import { Modal } from 'bootstrap';
 
 export default {
   name: "DashboardDefault",
-  components: {
-    // Удаляем импорт QuizTable
-  },
   data() {
     return {
       userId: localStorage.getItem("userId"),
@@ -117,7 +116,7 @@ export default {
     async fetchContentByTags() {
       try {
         this.loading = true;
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/user/${this.userId}/content/by-tags`);
+        const response = await axiosInstance.get(`/user/${this.userId}/content/by-tags`);
         this.contentData = response.data;
 
         // Отладка: выводим полученные данные о контенте
@@ -138,7 +137,7 @@ export default {
     async searchDocuments() {
       if (this.searchQuery.length > 0) {
         try {
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/content/search-documents?user_id=${this.userId}&search_query=${this.searchQuery}`);
+          const response = await axiosInstance.get(`/content/search-documents?user_id=${this.userId}&search_query=${this.searchQuery}`);
           this.documents = response.data.documents; // Обновляем список документов
         } catch (error) {
           console.error("Ошибка при поиске документов:", error);
@@ -169,7 +168,7 @@ export default {
       // Проверяем, является ли файл аудио или видео
       if (this.isAudio(fileExtension) || this.isVideo(fileExtension)) {
         // Настраиваем модальное окно для медиа файла
-        this.currentMediaUrl = `${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`;
+        this.currentMediaUrl = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
         this.currentMediaTitle = doc.title || this.getFileName(doc.file_path);
         
         // Устанавливаем тип медиа
@@ -186,22 +185,23 @@ export default {
         // Открываем модальное окно
         this.mediaPlayerModal.show();
       } else {
-        // Для других типов файлов открываем в новой вкладке
-        window.open(`${import.meta.env.VITE_API_URL}/content/view-file/${doc.id}`, '_blank');
+        // Для всех остальных файлов используем Google Docs Viewer
+        const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
+        window.open(viewerUrl, '_blank');
       }
     },
     async downloadDocument(doc) {
       try {
         // Скачивание документа
-        window.location.href = `${import.meta.env.VITE_API_URL}/content/download-file/${doc.id}`;
+        window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
       } catch (error) {
         console.error("Ошибка при скачивании документа:", error);
       }
     },
     copyLink(docId, action) {
       const url = action === 'view' 
-        ? `${import.meta.env.VITE_API_URL}/content/view-file/${docId}` 
-        : `${import.meta.env.VITE_API_URL}/content/download-file/${docId}`;
+        ? `${axiosInstance.defaults.baseURL}/content/document-viewer/${docId}` 
+        : `${axiosInstance.defaults.baseURL}/content/download-file/${docId}`;
       
       if (navigator.clipboard) {
         navigator.clipboard.writeText(url).then(() => {

@@ -1,55 +1,183 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request
 import os
 from sqlalchemy.orm import Session
 from database import get_db
 from models_db import Access, Content, User, Tag
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from typing import List
-
+import re
+import requests
+import shutil
 
 router = APIRouter(prefix="/content", tags=["content"])
 
-# # Эндпоинт для загрузки файлов
-# @router.post("/upload-file")
-# async def upload_file(
-#     file: UploadFile = File(...),
-#     directory: str = ""  # Добавляем параметр для указания поддиректории
-# ):
-#     # Создаем базовую директорию /app/files/, если она не существует
-#     os.makedirs("/app/files/", exist_ok=True)
-    
-#     # Формируем путь к директории для сохранения файла
-#     if directory:
-#         # Убираем начальный и конечный слеши, если они есть
-#         directory = directory.strip('/')
+@router.get("/document-viewer/{content_id}")
+async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db)):
+    """
+    Возвращает HTML страницу для просмотра документа через Google Docs Viewer
+    """
+    try:
+        # Получаем контент из базы данных
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if not content:
+            raise HTTPException(status_code=404, detail="Документ не найден")
         
-#         # Проверяем, начинается ли путь с /app/files/
-#         if directory.startswith('/app/files/'):
-#             target_dir = directory
-#         else:
-#             target_dir = f"/app/files/{directory}"
+        # Получаем расширение файла
+        file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
+        
+        # Определяем URL для скачивания файла
+        download_url = f"http://localhost:8081/content/download-file/{content_id}"
+        
+        # Поддерживаемые форматы для Google Docs Viewer
+        supported_formats = ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf']
+        
+        if file_extension in supported_formats:
+            # Используем Google Docs Viewer для поддерживаемых форматов
+            google_docs_url = f"https://docs.google.com/viewer?url={download_url}&embedded=true"
             
-#         # Создаем директорию, если она не существует
-#         os.makedirs(target_dir, exist_ok=True)
-        
-#         # Формируем полный путь к файлу
-#         file_location = f"{target_dir}/{file.filename}"
-#     else:
-#         # Если директория не указана, сохраняем в корневую директорию /app/files/
-#         file_location = f"/app/files/{file.filename}"
-    
-#     # Проверка на уникальность имени файла
-#     if os.path.exists(file_location):
-#         return {"message": f"Файл с таким именем уже существует в {os.path.dirname(file_location)}."}
-
-#     # Сохранение файла в указанную директорию
-#     try:
-#         with open(file_location, "wb") as f:
-#             f.write(await file.read())
-#         return {"message": f"Файл '{file.filename}' успешно загружен в {os.path.dirname(file_location)}."}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Ошибка при сохранении файла: {str(e)}")
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{content.title} - Просмотр документа</title>
+                <style>
+                    body {{
+                        margin: 0;
+                        padding: 0;
+                        font-family: Arial, sans-serif;
+                        background-color: #f5f5f5;
+                    }}
+                    .header {{
+                        background: #f8f9fa;
+                        padding: 15px 20px;
+                        border-bottom: 1px solid #dee2e6;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    }}
+                    .header h1 {{
+                        margin: 0;
+                        font-size: 18px;
+                        color: #333;
+                    }}
+                    .header .controls {{
+                        display: flex;
+                        gap: 10px;
+                    }}
+                    .btn {{
+                        padding: 8px 16px;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        text-decoration: none;
+                        font-size: 14px;
+                    }}
+                    .btn-primary {{
+                        background: #007bff;
+                        color: white;
+                    }}
+                    .btn-secondary {{
+                        background: #6c757d;
+                        color: white;
+                    }}
+                    .google-docs-info {{
+                        background: #fff3cd;
+                        border: 1px solid #ffeaa7;
+                        color: #856404;
+                        padding: 10px;
+                        border-radius: 4px;
+                        margin: 10px 20px;
+                    }}
+                    #viewer {{
+                        width: 100%;
+                        height: calc(100vh - 80px);
+                        border: none;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>{content.title}</h1>
+                    <div class="controls">
+                        <a href="/content/download-file/{content_id}" class="btn btn-primary">Скачать</a>
+                        <a href="javascript:history.back()" class="btn btn-secondary">Назад</a>
+                    </div>
+                </div>
+                <div class="google-docs-info">
+                    <strong>Внимание:</strong> Google Docs Viewer может не работать с файлами на localhost. 
+                    Для корректной работы убедитесь, что файл доступен по публичному URL.
+                </div>
+                <iframe id="viewer" src="{google_docs_url}"></iframe>
+            </body>
+            </html>
+            """
+            
+            return HTMLResponse(content=html_content)
+        else:
+            # Для неподдерживаемых форматов показываем сообщение
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{content.title} - Неподдерживаемый формат</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background-color: #f5f5f5;
+                    }}
+                    .container {{
+                        max-width: 600px;
+                        margin: 0 auto;
+                        background: white;
+                        padding: 30px;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        text-align: center;
+                    }}
+                    .btn {{
+                        padding: 10px 20px;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        text-decoration: none;
+                        font-size: 14px;
+                        margin: 10px;
+                    }}
+                    .btn-primary {{
+                        background: #007bff;
+                        color: white;
+                    }}
+                    .btn-secondary {{
+                        background: #6c757d;
+                        color: white;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Неподдерживаемый формат файла</h1>
+                    <p>Формат файла <strong>.{file_extension}</strong> не поддерживается для просмотра в браузере.</p>
+                    <p>Вы можете скачать файл для просмотра в соответствующем приложении.</p>
+                    <div>
+                        <a href="/content/download-file/{content_id}" class="btn btn-primary">Скачать файл</a>
+                        <a href="javascript:history.back()" class="btn btn-secondary">Назад</a>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            return HTMLResponse(content=html_content)
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы просмотра: {str(e)}")
 
 @router.post("/upload-content")
 async def upload_content(
@@ -60,31 +188,20 @@ async def upload_content(
     file: UploadFile = File(...),
     tag_id: int = None,
     user_id: int = None,
-    directory: str = "",  # Добавляем параметр для указания поддиректории
     db: Session = Depends(get_db)
 ):
     # Создаем базовую директорию /app/files/, если она не существует
     os.makedirs("/app/files/", exist_ok=True)
     
-    # Формируем путь к директории для сохранения файла
-    if directory:
-        # Убираем начальный и конечный слеши, если они есть
-        directory = directory.strip('/')
-        
-        # Проверяем, начинается ли путь с /app/files/
-        if directory.startswith('/app/files/'):
-            target_dir = directory
-        else:
-            target_dir = f"/app/files/{directory}"
-            
-        # Создаем директорию, если она не существует
-        os.makedirs(target_dir, exist_ok=True)
-        
-        # Формируем полный путь к файлу
-        file_location = f"{target_dir}/{file.filename}"
-    else:
-        # Если директория не указана, сохраняем в корневую директорию /app/files/
-        file_location = f"/app/files/{file.filename}"
+    # Автоматически формируем путь на основе ID отдела с новой структурой
+    department_directory = f"ContentForDepartment/AllTypesOfFiles/{department_id}"
+    target_dir = f"/app/files/{department_directory}"
+    
+    # Создаем директорию для отдела, если она не существует
+    os.makedirs(target_dir, exist_ok=True)
+    
+    # Формируем полный путь к файлу
+    file_location = f"{target_dir}/{file.filename}"
     
     try:
         with open(file_location, "wb") as f:
@@ -115,28 +232,24 @@ async def upload_content(
 @router.post("/upload-files")
 async def upload_files(
     files: List[UploadFile] = File(...),
-    directory: str = "",  # Параметр для указания поддиректории
     access_level: int = 1,
     department_id: int = 1,
     db: Session = Depends(get_db)
 ):
     # Базовая директория для всех файлов
     base_dir = "/app/files"
+    print(f"DEBUG: Создаем базовую директорию: {base_dir}")
     os.makedirs(base_dir, exist_ok=True)
+    print(f"DEBUG: Базовая директория создана/существует: {os.path.exists(base_dir)}")
     
-    # Формируем путь к поддиректории
-    if directory:
-        # Очищаем путь от начальных и конечных слешей
-        clean_directory = directory.strip('/')
-        
-        # Создаем полный путь внутри базовой директории
-        target_dir = os.path.join(base_dir, clean_directory)
-        
-        # Создаем все необходимые поддиректории
-        os.makedirs(target_dir, exist_ok=True)
-    else:
-        # Если директория не указана, используем базовую
-        target_dir = base_dir
+    # Автоматически формируем путь на основе ID отдела
+    department_directory = f"ContentForDepartment/{department_id}"
+    target_dir = os.path.join(base_dir, department_directory)
+    print(f"DEBUG: Целевая директория: {target_dir}")
+    
+    # Создаем директорию для отдела, если она не существует
+    os.makedirs(target_dir, exist_ok=True)
+    print(f"DEBUG: Директория отдела создана/существует: {os.path.exists(target_dir)}")
     
     # Список для хранения информации о загруженных файлах
     uploaded_files_info = []
@@ -353,45 +466,7 @@ async def download_file(content_id: int, db: Session = Depends(get_db)):
     # Возвращаем файл как ответ
     return FileResponse(file_path, media_type='application/octet-stream', filename=os.path.basename(file_path))
 
-@router.get("/view-file/{content_id}")
-async def view_file(content_id: int, db: Session = Depends(get_db)):
-    # Получаем контент из базы данных по ID
-    content = db.query(Content).filter(Content.id == content_id).first()
-    if content is None:
-        raise HTTPException(status_code=404, detail="Контент не найден")
 
-    # Проверяем, существует ли файл
-    file_path = content.file_path
-    if not os.path.exists(file_path):
-        # Если файл не найден по абсолютному пути, проверяем, может быть это старый путь
-        # и нужно добавить префикс /app/files/
-        if not file_path.startswith('/app/files/'):
-            new_path = f"/app/files/{os.path.basename(file_path)}"
-            if os.path.exists(new_path):
-                file_path = new_path
-            else:
-                raise HTTPException(status_code=404, detail="Файл не найден")
-        else:
-            raise HTTPException(status_code=404, detail="Файл не найден")
-
-    # Определяем тип файла на основе расширения
-    file_extension = os.path.splitext(file_path)[1].lower()
-    
-    # Устанавливаем соответствующий media_type в зависимости от расширения файла
-    if file_extension in ['.pdf']:
-        media_type = 'application/pdf'
-    elif file_extension in ['.mp3', '.wav', '.ogg']:
-        media_type = f'audio/{file_extension[1:]}'
-    elif file_extension in ['.mp4', '.webm', '.avi', '.mov']:
-        media_type = f'video/{file_extension[1:]}'
-    elif file_extension in ['.jpg', '.jpeg', '.png', '.gif']:
-        media_type = f'image/{file_extension[1:]}'
-    else:
-        # Для других типов файлов используем общий тип
-        media_type = 'application/octet-stream'
-
-    # Возвращаем файл как ответ с заголовком для открытия в браузере
-    return FileResponse(file_path, media_type=media_type, filename=os.path.basename(file_path), headers={"Content-Disposition": "inline"})
 
 @router.get("/user/{user_id}/content/by-tags/{tag_id}")
 async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Session = Depends(get_db)):
@@ -498,12 +573,97 @@ async def update_tag(tag_id: int, tag_name: str, db: Session = Depends(get_db)):
 
 @router.delete("/delete-tag/{tag_id}")
 async def delete_tag(tag_id: int, db: Session = Depends(get_db)):
+    """
+    Удаляет тег по ID.
+    """
     try:
         tag = db.query(Tag).filter(Tag.id == tag_id).first()
-        if tag is None: 
+        if tag is None:
             raise HTTPException(status_code=404, detail="Тег не найден")
+        
         db.delete(tag)
         db.commit()
         return {"message": "Тег успешно удален"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при удалении тега: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении тега: {str(e)}")
+
+@router.get("/list-files/{department_id}")
+async def list_department_files(department_id: int):
+    """
+    Возвращает список файлов в директории отдела.
+    """
+    try:
+        # Формируем путь к директории отдела
+        department_path = f"/app/files/ContentForDepartment/{department_id}"
+        
+        if not os.path.exists(department_path):
+            return {
+                "department_id": department_id,
+                "path": department_path,
+                "exists": False,
+                "files": [],
+                "message": f"Директория для отдела {department_id} не существует"
+            }
+        
+        # Получаем список файлов
+        files = []
+        for filename in os.listdir(department_path):
+            file_path = os.path.join(department_path, filename)
+            if os.path.isfile(file_path):
+                file_size = os.path.getsize(file_path)
+                files.append({
+                    "name": filename,
+                    "size": file_size,
+                    "size_formatted": f"{file_size} bytes"
+                })
+        
+        return {
+            "department_id": department_id,
+            "path": department_path,
+            "exists": True,
+            "files": files,
+            "total_files": len(files),
+            "message": f"Найдено {len(files)} файлов в директории отдела {department_id}"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении списка файлов: {str(e)}")
+
+@router.get("/list-all-departments")
+async def list_all_departments():
+    """
+    Возвращает список всех отделов с файлами.
+    """
+    try:
+        base_path = "/app/files/ContentForDepartment"
+        
+        if not os.path.exists(base_path):
+            return {
+                "base_path": base_path,
+                "exists": False,
+                "departments": [],
+                "message": "Базовая директория не существует"
+            }
+        
+        departments = []
+        for item in os.listdir(base_path):
+            item_path = os.path.join(base_path, item)
+            if os.path.isdir(item_path):
+                # Подсчитываем файлы в директории
+                file_count = len([f for f in os.listdir(item_path) if os.path.isfile(os.path.join(item_path, f))])
+                departments.append({
+                    "department_id": item,
+                    "file_count": file_count,
+                    "path": item_path
+                })
+        
+        return {
+            "base_path": base_path,
+            "exists": True,
+            "departments": departments,
+            "total_departments": len(departments),
+            "message": f"Найдено {len(departments)} отделов"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении списка отделов: {str(e)}") 
