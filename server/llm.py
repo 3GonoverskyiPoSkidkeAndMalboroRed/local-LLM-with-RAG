@@ -103,11 +103,23 @@ def _sync_chat_invoke(final_chain, inputs):
 
 async def _async_chat_invoke(final_chain, inputs, timeout: int = 100):
     """Асинхронная обертка для выполнения LLM цепочки в отдельном потоке с тайм-аутом"""
-    loop = asyncio.get_event_loop()
-    return await asyncio.wait_for(
-        loop.run_in_executor(_thread_pool, _sync_chat_invoke, final_chain, inputs),
-        timeout=timeout
-    )
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # Если нет запущенного event loop, создаем новый
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(_thread_pool, _sync_chat_invoke, final_chain, inputs),
+            timeout=timeout
+        )
+    except asyncio.TimeoutError:
+        raise TimeoutError(f"Превышен таймаут {timeout} секунд при выполнении LLM запроса")
+    except Exception as e:
+        print(f"Ошибка в _async_chat_invoke: {e}")
+        raise
 
 
 def getStreamingChain(question: str, memory, llm, db):

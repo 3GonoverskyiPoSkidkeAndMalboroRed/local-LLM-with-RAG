@@ -128,13 +128,31 @@ class YandexEmbeddings(Embeddings):
             return []
         
         try:
+            # Фильтруем пустые тексты
+            valid_texts = []
+            valid_indices = []
+            for i, text in enumerate(texts):
+                if text and text.strip():
+                    valid_texts.append(text)
+                    valid_indices.append(i)
+                else:
+                    logger.warning(f"Пропускаем пустой текст в позиции {i}")
+            
+            if not valid_texts:
+                logger.warning("Все тексты пустые, возвращаем нулевые векторы")
+                return [[0.0] * 256 for _ in texts]
+            
             # Проверяем кэш
-            texts_to_process, cached_embeddings = self._batch_texts_with_cache(texts)
+            texts_to_process, cached_embeddings = self._batch_texts_with_cache(valid_texts)
             
             # Если все эмбеддинги в кэше
             if not texts_to_process:
-                logger.info(f"Все {len(texts)} эмбеддингов загружены из кэша")
-                return [cached_embeddings[i] for i in range(len(texts))]
+                logger.info(f"Все {len(valid_texts)} эмбеддингов загружены из кэша")
+                # Восстанавливаем полный результат с нулевыми векторами для пустых текстов
+                result = [[0.0] * 256 for _ in texts]
+                for i, valid_idx in enumerate(valid_indices):
+                    result[valid_idx] = cached_embeddings[i]
+                return result
             
             # Обрабатываем тексты, которых нет в кэше
             adapter = await self._get_adapter()
@@ -148,15 +166,18 @@ class YandexEmbeddings(Embeddings):
                 self._save_to_cache(text, embedding)
                 cached_embeddings[original_index] = embedding
             
-            # Собираем результат в правильном порядке
-            result = [cached_embeddings[i] for i in range(len(texts))]
+            # Восстанавливаем полный результат с нулевыми векторами для пустых текстов
+            result = [[0.0] * 256 for _ in texts]
+            for i, valid_idx in enumerate(valid_indices):
+                result[valid_idx] = cached_embeddings[i]
             
-            logger.info(f"Создано эмбеддингов: {len(new_embeddings)}, из кэша: {len(texts) - len(new_embeddings)}")
+            logger.info(f"Создано эмбеддингов: {len(new_embeddings)}, из кэша: {len(valid_texts) - len(new_embeddings)}")
             return result
             
         except Exception as e:
             logger.error(f"Ошибка создания эмбеддингов: {e}")
-            raise
+            # Возвращаем нулевые векторы в случае ошибки
+            return [[0.0] * 256 for _ in texts]
     
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """
@@ -190,21 +211,22 @@ class YandexEmbeddings(Embeddings):
         
         # Создаем эмбеддинги для отсутствующих текстов
         if missing_texts:
-            # Запускаем асинхронный метод в синхронном контексте
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            
-            if loop.is_running():
-                # Если цикл уже запущен, создаем новый в отдельном потоке
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(self._run_in_new_loop, missing_texts, 'documents')
-                    new_embeddings = future.result()
-            else:
-                new_embeddings = loop.run_until_complete(self._aembed_documents(missing_texts))
+            # Запускаем асинхронный метод в отдельном потоке для избежания конфликтов с event loop
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(self._run_in_new_loop, missing_texts, 'documents')
+                try:
+                    new_embeddings = future.result(timeout=60)  # 60 секунд таймаут для batch
+                except concurrent.futures.TimeoutError:
+                    print(f"Таймаут при создании эмбеддингов для {len(missing_texts)} текстов")
+                    # Возвращаем нулевые векторы в случае таймаута
+                    dimension = 256  # Стандартная размерность
+                    new_embeddings = [[0.0] * dimension for _ in missing_texts]
+                except Exception as e:
+                    print(f"Ошибка при создании эмбеддингов: {e}")
+                    # Возвращаем нулевые векторы в случае ошибки
+                    dimension = 256  # Стандартная размерность
+                    new_embeddings = [[0.0] * dimension for _ in missing_texts]
             
             # Сохраняем новые эмбеддинги в кэш
             try:
@@ -241,6 +263,12 @@ class YandexEmbeddings(Embeddings):
     async def _aembed_query(self, text: str) -> List[float]:
         """Асинхронное создание эмбеддинга для поискового запроса"""
         try:
+            # Проверяем, что текст не пустой
+            if not text or not text.strip():
+                logger.warning(f"Получен пустой текст для создания эмбеддинга: '{text}'")
+                # Возвращаем нулевой вектор
+                return [0.0] * 256  # Стандартная размерность
+            
             # Проверяем кэш
             cached_embedding = self._load_from_cache(text)
             
@@ -260,11 +288,13 @@ class YandexEmbeddings(Embeddings):
                 self._save_to_cache(text, embedding)
                 return embedding
             else:
-                raise ValueError("Пустой ответ от API эмбеддингов")
+                logger.warning("Пустой ответ от API эмбеддингов, возвращаем нулевой вектор")
+                return [0.0] * 256  # Стандартная размерность
                 
         except Exception as e:
             logger.error(f"Ошибка создания эмбеддинга запроса: {e}")
-            raise
+            # Возвращаем нулевой вектор в случае ошибки
+            return [0.0] * 256  # Стандартная размерность
     
     def embed_query(self, text: str) -> List[float]:
         """
@@ -289,22 +319,19 @@ class YandexEmbeddings(Embeddings):
         except ImportError:
             logger.warning("Кэш недоступен, создаем эмбеддинг без кэширования")
         
-        # Создаем эмбеддинг
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        if loop.is_running():
-            # Если цикл уже запущен, создаем новый в отдельном потоке
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(self._run_in_new_loop, [text], 'query')
-                result = future.result()
+        # Создаем эмбеддинг в отдельном потоке для избежания конфликтов с event loop
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(self._run_in_new_loop, [text], 'query')
+            try:
+                result = future.result(timeout=30)  # 30 секунд таймаут
                 embedding = result[0] if result else []
-        else:
-            embedding = loop.run_until_complete(self._aembed_query(text))
+            except concurrent.futures.TimeoutError:
+                print(f"Таймаут при создании эмбеддинга для текста: {text[:50]}...")
+                embedding = []
+            except Exception as e:
+                print(f"Ошибка при создании эмбеддинга: {e}")
+                embedding = []
         
         # Сохраняем в кэш
         try:
@@ -315,19 +342,31 @@ class YandexEmbeddings(Embeddings):
         return embedding
     
     def _run_in_new_loop(self, texts: List[str], mode: str) -> List[List[float]]:
-        """Запуск в новом event loop"""
+        """Запуск в новом event loop с обработкой ошибок"""
         new_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(new_loop)
         try:
             if mode == 'documents':
-                return new_loop.run_until_complete(self._aembed_documents(texts))
+                result = new_loop.run_until_complete(self._aembed_documents(texts))
+                return result
             elif mode == 'query':
                 result = new_loop.run_until_complete(self._aembed_query(texts[0]))
                 return [result]
             else:
                 raise ValueError(f"Неизвестный режим: {mode}")
+        except Exception as e:
+            print(f"Ошибка в _run_in_new_loop для режима {mode}: {e}")
+            # Возвращаем нулевые векторы в случае ошибки
+            dimension = 256  # Стандартная размерность
+            if mode == 'documents':
+                return [[0.0] * dimension for _ in texts]
+            else:
+                return [[0.0] * dimension]
         finally:
-            new_loop.close()
+            try:
+                new_loop.close()
+            except:
+                pass  # Игнорируем ошибки при закрытии loop
     
     def clear_cache(self) -> int:
         """

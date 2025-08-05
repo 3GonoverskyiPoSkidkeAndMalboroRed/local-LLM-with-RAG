@@ -99,17 +99,23 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
                 
                 # Кодируем запрос в вектор
                 try:
-                    # Проверяем, что запрос не пустой
-                    if not q or not q.strip():
+                    # Проверяем, что запрос не пустой и содержит не только пробелы
+                    q_clean = q.strip()
+                    if not q_clean:
                         print(f"Пропускаем пустой запрос: '{q}'")
+                        continue
+                    
+                    # Проверяем минимальную длину запроса
+                    if len(q_clean) < 2:
+                        print(f"Пропускаем слишком короткий запрос: '{q}' (длина: {len(q_clean)})")
                         continue
                         
                     # Используем embed_query для поисковых запросов (более подходящий метод)
                     if hasattr(embedding_model, 'embed_query'):
-                        query_emb = embedding_model.embed_query(q)
+                        query_emb = embedding_model.embed_query(q_clean)
                     else:
                         # Fallback для совместимости
-                        query_emb = embedding_model.embed_documents([q])[0]
+                        query_emb = embedding_model.embed_documents([q_clean])[0]
                 except Exception as embed_error:
                     print(f"Ошибка создания эмбеддинга для запроса '{q}': {embed_error}")
                     continue
@@ -167,7 +173,13 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
                         top_chunks.append(chunk_content)
                 
                 if hasattr(doc, 'metadata') and doc.metadata:
-                    metadata = doc.metadata
+                    metadata = doc.metadata.copy()  # Копируем метаданные
+                    
+                    # Добавляем file_path, если его нет, используя source
+                    if 'file_path' not in metadata and 'source' in metadata:
+                        metadata['file_path'] = metadata['source']
+                    elif 'file_path' not in metadata:
+                        metadata['file_path'] = 'unknown_file'
                 
                 top_scores.append(score)
                 top_metadata.append(metadata)
@@ -184,6 +196,10 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
                     filtered_metadata.append(meta)
             
             print(f"Отфильтровано {len(filtered_chunks)} содержательных фрагментов")
+            
+            # Отладочная информация о метаданных
+            for i, meta in enumerate(filtered_metadata[:3]):  # Показываем первые 3
+                print(f"DEBUG: Метаданные {i+1}: {meta}")
             
             result = [filtered_chunks, filtered_scores, filtered_metadata]
         except Exception as e:

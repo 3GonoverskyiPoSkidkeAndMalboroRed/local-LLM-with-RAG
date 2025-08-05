@@ -176,10 +176,26 @@ async def process_query_task(task_id: str):
                 
                 # Распаковываем результат поиска
                 if len(search_result) >= 3:
-                    top_chunks, top_files, detailed_results = search_result
-                else:
-                    top_chunks, top_files = search_result
+                    top_chunks, scores, metadata = search_result
+                    # Создаем detailed_results из metadata
                     detailed_results = []
+                    for i, (chunk, score, meta) in enumerate(zip(top_chunks, scores, metadata)):
+                        # Извлекаем file_path из metadata
+                        file_path = meta.get('file_path', f'unknown_file_{i}')
+                        detailed_results.append({
+                            'file_path': file_path,
+                            'chunk_content': chunk,
+                            'metadata': {
+                                'page': meta.get('page'),
+                                'score': score
+                            }
+                        })
+                    # Для совместимости создаем top_files
+                    top_files = [meta.get('file_path', f'unknown_file_{i}') for i, meta in enumerate(metadata)]
+                else:
+                    top_chunks, scores = search_result
+                    detailed_results = []
+                    top_files = []
                 
                 print(f"Задача {task_id}: Векторный поиск выполнен за {time.time() - start_time:.2f} секунд")
                 
@@ -214,16 +230,20 @@ async def process_query_task(task_id: str):
             # Используем детальные результаты, если они доступны
             if detailed_results:
                 for i, result in enumerate(detailed_results):
-                    file_path = result['file_path']
+                    # Безопасное извлечение данных с fallback значениями
+                    file_path = result.get('file_path', f'unknown_file_{i}')
+                    chunk_content = result.get('chunk_content', '')
+                    metadata = result.get('metadata', {})
+                    
                     file_name = file_path.split('/')[-1] if '/' in file_path else file_path
                     
                     source_info = SourceInfo(
                         file_name=file_name,
                         file_path=file_path,
-                        chunk_content=result['chunk_content'],
+                        chunk_content=chunk_content,
                         chunk_id=f"chunk_{task_id}_{i}",
-                        page_number=result['metadata'].get('page', None),
-                        similarity_score=result['metadata'].get('score', None)
+                        page_number=metadata.get('page', None),
+                        similarity_score=metadata.get('score', None)
                     )
                     sources_info.append(source_info)
             else:
