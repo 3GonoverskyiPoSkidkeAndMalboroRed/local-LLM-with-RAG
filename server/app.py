@@ -3,6 +3,10 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, AP
 from pydantic import BaseModel
 import uvicorn
 import os
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из .env файла
+load_dotenv()
 
 # Получение URL для Ollama из переменной окружения или использование значения по умолчанию
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
@@ -33,6 +37,8 @@ from routes.llm_routes import router as llm_router  # Импортируйте �
 from routes.content_routes import router as content_router
 from routes.user_routes import router as user_router
 from routes.feedback_routes import router as feedback_router
+from yandex_cloud_config import yandex_cloud_config
+from routes.yandex_ai_routes import router as yandex_ai_router
 
 # Инициализация глобальных переменных
 app = FastAPI()
@@ -52,6 +58,7 @@ app.include_router(llm_router)  # Добавьте маршрутизатор д
 app.include_router(content_router)
 app.include_router(user_router)
 app.include_router(feedback_router)
+app.include_router(yandex_ai_router)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -117,6 +124,18 @@ def main(llm_model_name: str, embedding_model_name: str, documents_path: str, de
     if not success:
         print("Не удалось инициализировать LLM. Завершение работы.")
         sys.exit(1)
+    
+    # Инициализация Yandex Cloud SDK
+    yandex_cloud_initialized = yandex_cloud_config.initialize(
+        service_account_key_path=os.getenv('YC_SERVICE_ACCOUNT_KEY_PATH'),
+        folder_id=os.getenv('YC_FOLDER_ID'),
+        cloud_id=os.getenv('YC_CLOUD_ID')
+    )
+    
+    if yandex_cloud_initialized:
+        print("✅ Yandex Cloud SDK успешно инициализирован")
+    else:
+        print("⚠️  Yandex Cloud SDK не инициализирован. Проверьте переменные окружения.")
     
     if web_mode:
         print(f"Запуск HTTP сервера на порту {port}...")

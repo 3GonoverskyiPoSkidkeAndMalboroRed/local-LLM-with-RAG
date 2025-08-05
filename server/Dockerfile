@@ -17,6 +17,9 @@ COPY requirements.txt .
 # Установка зависимостей Python
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Создание директории для Yandex Cloud конфигурации
+RUN mkdir -p /app/yandex-cloud-config
+
 # Копирование исходного кода приложения
 COPY . .
 
