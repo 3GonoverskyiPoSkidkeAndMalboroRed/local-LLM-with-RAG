@@ -147,7 +147,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "-m",
         "--model",
-        default="llama2",
+        default="gemma3",
         help="The name of the LLM model to use.",
     )
     parser.add_argument(
