@@ -34,6 +34,7 @@ from routes.content_routes import router as content_router
 from routes.user_routes import router as user_router
 from routes.feedback_routes import router as feedback_router
 from routes.yandex_routes import router as yandex_router
+from routes.yandex_rag_routes import router as yandex_rag_router
 
 # Инициализация глобальных переменных
 app = FastAPI()
@@ -54,6 +55,7 @@ app.include_router(content_router)
 app.include_router(user_router)
 app.include_router(feedback_router)
 app.include_router(yandex_router)  # Добавляем роутер для Yandex GPT
+app.include_router(yandex_rag_router)  # Добавляем специализированный RAG роутер
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

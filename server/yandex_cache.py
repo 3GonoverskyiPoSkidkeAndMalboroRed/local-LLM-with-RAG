@@ -556,6 +556,47 @@ class YandexCache:
         """Очищает весь кэш"""
         return self.backend.clear()
     
+    def get_rag_result(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Получить результат RAG операции из кэша"""
+        try:
+            entry = self.backend.get(f"rag_result:{cache_key}")
+            if entry and not entry.is_expired():
+                entry.touch()
+                return entry.value
+            return None
+        except Exception as e:
+            logger.warning(f"Ошибка при получении RAG результата из кэша: {e}")
+            return None
+    
+    def set_rag_result(self, cache_key: str, result: Dict[str, Any], ttl: int = 3600) -> bool:
+        """Сохранить результат RAG операции в кэш"""
+        try:
+            return self.backend.set(
+                f"rag_result:{cache_key}",
+                result,
+                ttl=ttl,
+                metadata={"type": "rag_result", "created_at": datetime.now().isoformat()}
+            )
+        except Exception as e:
+            logger.warning(f"Ошибка при сохранении RAG результата в кэш: {e}")
+            return False
+    
+    def clear_rag_cache(self) -> int:
+        """Очистить только RAG кэш"""
+        cleared_count = 0
+        keys_to_remove = []
+        
+        for key in self.backend.keys():
+            if key.startswith("rag_result:"):
+                keys_to_remove.append(key)
+        
+        for key in keys_to_remove:
+            if self.backend.delete(key):
+                cleared_count += 1
+        
+        logger.info(f"Очищено {cleared_count} RAG записей из кэша")
+        return cleared_count
+    
     def optimize(self) -> Dict[str, Any]:
         """Оптимизирует кэш (очищает истекшие записи и дефрагментирует)"""
         logger.info("Начинаем оптимизацию кэша...")

@@ -39,16 +39,9 @@ def get_embedding_function(model_name: str):
     Returns:
         Экземпляр YandexEmbeddings
     """
-    use_yandex_cloud = get_env_bool("USE_YANDEX_CLOUD", False)
-    
-    if use_yandex_cloud:
-        print(f"Используем YandexEmbeddings с моделью {model_name}")
-        return create_embeddings(model=model_name)
-    else:
-        raise ValueError(
-            "❌ Yandex Cloud отключен! Для работы RAG функционала установите USE_YANDEX_CLOUD=true. "
-            "Ollama fallback отключен для обеспечения полного использования Yandex API."
-        )
+    print(f"Используем YandexEmbeddings с моделью {model_name}")
+    from yandex_embeddings import create_yandex_embeddings
+    return create_yandex_embeddings(model=model_name)
 
 def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 20):
     """
@@ -62,7 +55,7 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
         timeout (int): Таймаут в секундах для операции поиска
         
     Returns:
-        tuple: Кортеж из двух списков - топ-фрагменты и топ-файлы
+        tuple: Кортеж из трех списков - топ-фрагменты, scores, metadata
     """
     start_time = time.time()
     result = []
@@ -106,6 +99,11 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
                 
                 # Кодируем запрос в вектор
                 try:
+                    # Проверяем, что запрос не пустой
+                    if not q or not q.strip():
+                        print(f"Пропускаем пустой запрос: '{q}'")
+                        continue
+                        
                     # Используем embed_query для поисковых запросов (более подходящий метод)
                     if hasattr(embedding_model, 'embed_query'):
                         query_emb = embedding_model.embed_query(q)
@@ -116,70 +114,78 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
                     print(f"Ошибка создания эмбеддинга для запроса '{q}': {embed_error}")
                     continue
                 
-                # Оптимизированный поиск - только один быстрый метод
+                # Оптимизированный поиск - используем similarity_search_with_score для получения scores
                 try:
-                    search_result = db.similarity_search_by_vector(query_emb, k=n_top_cos)
-                    for doc in search_result:
+                    # Проверяем, что db имеет правильный тип
+                    if hasattr(db, 'similarity_search_with_score'):
+                        search_result = db.similarity_search_with_score(query_emb, k=n_top_cos)
+                    elif hasattr(db, 'similarity_search_by_vector'):
+                        search_result = db.similarity_search_by_vector(query_emb, k=n_top_cos)
+                        # Преобразуем в формат с scores
+                        search_result = [(doc, 0.8) for doc in search_result]  # Фиктивный score
+                    elif hasattr(db, 'similarity_search'):
+                        search_result = db.similarity_search(q, k=n_top_cos)
+                        # Преобразуем в формат с scores
+                        search_result = [(doc, 0.8) for doc in search_result]  # Фиктивный score
+                    else:
+                        print(f"Неподдерживаемый тип базы данных: {type(db)}")
+                        continue
+                        
+                    for doc, score in search_result:
                         content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
                         # Избегаем дубликатов по содержимому
                         content_hash = hash(content[:100])  # Используем первые 100 символов для хеша
                         if content_hash not in seen_content:
                             seen_content.add(content_hash)
-                            all_results.append(doc)
+                            all_results.append((doc, score))
                 except Exception as method_error:
                     print(f"Ошибка в поиске: {method_error}")
                     continue
             
-            # Сортируем результаты и берем топ
+            # Сортируем результаты по score и берем топ
+            all_results.sort(key=lambda x: x[1], reverse=True)  # Сортируем по score
             if len(all_results) > n_top_cos:
-                # Простая сортировка по длине - более длинные фрагменты часто содержат больше контекста
-                all_results.sort(key=lambda x: len(x.page_content) if hasattr(x, 'page_content') else 0, reverse=True)
                 all_results = all_results[:n_top_cos]
             
             print(f"Найдено {len(all_results)} уникальных результатов")
             
-            # Извлечение фрагментов и файлов из метаданных
+            # Извлечение фрагментов, scores и метаданных
             top_chunks = []
-            top_files = []
-            detailed_results = []
+            top_scores = []
+            top_metadata = []
             
-            for x in all_results:
+            for doc, score in all_results:
                 chunk_content = ""
-                file_path = ""
+                metadata = {}
                 
-                if hasattr(x, 'page_content') and x.page_content.strip():
-                    chunk_content = x.page_content
+                if hasattr(doc, 'page_content') and doc.page_content.strip():
+                    chunk_content = doc.page_content
                     top_chunks.append(chunk_content)
-                elif hasattr(x, 'metadata') and 'chunk' in x.metadata:
-                    chunk_content = x.metadata.get('chunk')
+                elif hasattr(doc, 'metadata') and 'chunk' in doc.metadata:
+                    chunk_content = doc.metadata.get('chunk')
                     if chunk_content and chunk_content.strip():
                         top_chunks.append(chunk_content)
-                    
-                if hasattr(x, 'metadata') and x.metadata:
-                    if 'source' in x.metadata and x.metadata.get('source'):
-                        file_path = x.metadata.get('source')
-                        top_files.append(file_path)
-                    elif 'file' in x.metadata and x.metadata.get('file'):
-                        file_path = x.metadata.get('file')
-                        top_files.append(file_path)
                 
-                # Сохраняем детальную информацию
-                if chunk_content and file_path:
-                    detailed_results.append({
-                        'chunk_content': chunk_content,
-                        'file_path': file_path,
-                        'metadata': x.metadata if hasattr(x, 'metadata') else {}
-                    })
-            
-            # Удаляем дубликаты из списка файлов
-            top_files = list(set(top_files))
+                if hasattr(doc, 'metadata') and doc.metadata:
+                    metadata = doc.metadata
+                
+                top_scores.append(score)
+                top_metadata.append(metadata)
             
             # Фильтруем слишком короткие чанки
-            top_chunks = [chunk for chunk in top_chunks if len(chunk.strip()) > 50]
+            filtered_chunks = []
+            filtered_scores = []
+            filtered_metadata = []
             
-            print(f"Отфильтровано {len(top_chunks)} содержательных фрагментов из {len(top_files)} файлов")
+            for chunk, score, meta in zip(top_chunks, top_scores, top_metadata):
+                if len(chunk.strip()) > 50:
+                    filtered_chunks.append(chunk)
+                    filtered_scores.append(score)
+                    filtered_metadata.append(meta)
             
-            result = [top_chunks, top_files, detailed_results]
+            print(f"Отфильтровано {len(filtered_chunks)} содержательных фрагментов")
+            
+            result = [filtered_chunks, filtered_scores, filtered_metadata]
         except Exception as e:
             import traceback
             print(f"Ошибка в vec_search: {e}")
@@ -195,15 +201,15 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
     if search_thread.is_alive():
         # Если поток все еще выполняется после таймаута
         print(f"Превышен таймаут ({timeout} сек) при выполнении векторного поиска")
-        return [], []
+        return [], [], []
     
     if error:
         print(f"Произошла ошибка при векторном поиске: {error}")
-        return [], []
+        return [], [], []
     
     if not result:
         print("Векторный поиск не вернул результатов")
-        return [], []
+        return [], [], []
     
     print(f"Улучшенный векторный поиск успешно завершен за {time.time() - start_time:.2f} секунд")
     return result[0], result[1], result[2] if len(result) > 2 else []
@@ -363,6 +369,15 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     documents = TEXT_SPLITTER.split_documents(new_documents)
     print(f"Разбито на {len(documents)} чанков")
     
+    # Фильтруем пустые чанки
+    filtered_documents = []
+    for doc in documents:
+        if hasattr(doc, 'page_content') and doc.page_content and doc.page_content.strip():
+            filtered_documents.append(doc)
+    
+    print(f"После фильтрации пустых чанков осталось {len(filtered_documents)} документов")
+    documents = filtered_documents
+    
     # Создаем встраивания и загружаем в Chroma
     print("Создание встраиваний и загрузка документов в Chroma...")
     
@@ -421,6 +436,12 @@ def load_documents(path: str) -> List[Document]:
         ".md": DirectoryLoader(
             path,
             glob="**/*.md",
+            loader_cls=TextLoader,
+            show_progress=True,
+        ),
+        ".txt": DirectoryLoader(
+            path,
+            glob="**/*.txt",
             loader_cls=TextLoader,
             show_progress=True,
         ),

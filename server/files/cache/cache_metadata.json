@@ -42,5 +42,140 @@
       "text_length": 13,
       "embedding_dim": 256
     }
+  },
+  "371dfad2c02a30802e549df0c9ae72fb": {
+    "created_at": "2025-08-05T08:21:11.718527",
+    "expires_at": "2025-08-06T08:21:11.718524",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 6,
+      "embedding_dim": 256
+    }
+  },
+  "5177f1bdddcf66fe6c7f8a4625e23949": {
+    "created_at": "2025-08-05T08:21:11.795531",
+    "expires_at": "2025-08-06T08:21:11.795529",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 256,
+      "embedding_dim": 256
+    }
+  },
+  "rag_result:f64498b2381f6c538d44e6156f7741af": {
+    "created_at": "2025-08-05T08:21:11.799656",
+    "expires_at": "2025-08-05T09:21:11.799652",
+    "size_bytes": 313,
+    "metadata": {
+      "type": "rag_result",
+      "created_at": "2025-08-05T08:21:11.799619"
+    }
+  },
+  "rag_result:2bfd532dcad16a835f2c9a439e336583": {
+    "created_at": "2025-08-05T08:21:11.825750",
+    "expires_at": "2025-08-05T09:21:11.825747",
+    "size_bytes": 313,
+    "metadata": {
+      "type": "rag_result",
+      "created_at": "2025-08-05T08:21:11.825725"
+    }
+  },
+  "a5fb2a236739dd6408a0d7be197da2c4": {
+    "created_at": "2025-08-05T08:22:08.799046",
+    "expires_at": "2025-08-06T08:22:08.799044",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 32,
+      "embedding_dim": 256
+    }
+  },
+  "9b95eac330396a31a96c03ba5ff6e41a": {
+    "created_at": "2025-08-05T08:22:08.894344",
+    "expires_at": "2025-08-06T08:22:08.894341",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 5,
+      "embedding_dim": 256
+    }
+  },
+  "rag_result:c646bd7fcb0d70aa741a2fde523bdd41": {
+    "created_at": "2025-08-05T08:22:08.901694",
+    "expires_at": "2025-08-05T09:22:08.901692",
+    "size_bytes": 313,
+    "metadata": {
+      "type": "rag_result",
+      "created_at": "2025-08-05T08:22:08.901672"
+    }
+  },
+  "rag_result:d0dd1267be4c8bcdce39ad616cbf2864": {
+    "created_at": "2025-08-05T08:22:08.922765",
+    "expires_at": "2025-08-05T09:22:08.922762",
+    "size_bytes": 313,
+    "metadata": {
+      "type": "rag_result",
+      "created_at": "2025-08-05T08:22:08.922743"
+    }
+  },
+  "a4cc4247c1d16a1e31945364e9158af8": {
+    "created_at": "2025-08-05T08:22:30.154222",
+    "expires_at": "2025-08-06T08:22:30.154220",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 1354,
+      "embedding_dim": 256
+    }
+  },
+  "5b037a4d156af9615f17b0cffc4a16ec": {
+    "created_at": "2025-08-05T08:22:30.154505",
+    "expires_at": "2025-08-06T08:22:30.154503",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 434,
+      "embedding_dim": 256
+    }
+  },
+  "3de31913cc202b39932f027b017f9182": {
+    "created_at": "2025-08-05T08:23:39.623085",
+    "expires_at": "2025-08-06T08:23:39.623082",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 62,
+      "embedding_dim": 256
+    }
+  },
+  "da9c4d060814d6a57baa20be9ed97cec": {
+    "created_at": "2025-08-05T08:23:39.625365",
+    "expires_at": "2025-08-06T08:23:39.625362",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 95,
+      "embedding_dim": 256
+    }
+  },
+  "018957b62e42f72a1288c495bd52e126": {
+    "created_at": "2025-08-05T08:23:39.636901",
+    "expires_at": "2025-08-06T08:23:39.636896",
+    "size_bytes": 2320,
+    "metadata": {
+      "type": "embedding",
+      "model": "text-search-doc",
+      "text_length": 99,
+      "embedding_dim": 256
+    }
   }
 }

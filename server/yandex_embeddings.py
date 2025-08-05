@@ -224,8 +224,14 @@ class YandexEmbeddings(Embeddings):
                         result.append(new_embeddings[missing_idx])
                         missing_idx += 1
                     else:
-                        # Fallback на пустой вектор
-                        result.append([0.0] * 768)
+                        # Fallback на пустой вектор с правильной размерностью
+                        # Получаем размерность из первого успешного эмбеддинга
+                        if new_embeddings:
+                            dimension = len(new_embeddings[0])
+                        else:
+                            # Если нет успешных эмбеддингов, используем стандартную размерность
+                            dimension = 256
+                        result.append([0.0] * dimension)
             
             return result
         

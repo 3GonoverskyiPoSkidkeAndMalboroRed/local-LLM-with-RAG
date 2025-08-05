@@ -84,7 +84,7 @@ class GenerateRequest(BaseModel):
     
     class Config:
         # Примеры для документации API
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "messages": "Привет! Расскажи про искусственный интеллект",
                 "model": "yandexgpt",
