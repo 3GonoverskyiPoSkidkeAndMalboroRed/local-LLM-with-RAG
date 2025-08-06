@@ -135,3 +135,31 @@ class Feedback(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     user = relationship("User")
+
+# Модели для RAG системы
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    content_id = Column(Integer, ForeignKey("content.id"), nullable=False)  # Связь с документом
+    department_id = Column(Integer, ForeignKey("department.id"), nullable=False)  # ID отдела
+    chunk_text = Column(Text, nullable=False)  # Текст чанка
+    chunk_index = Column(Integer, nullable=False)  # Порядковый номер чанка в документе
+    embedding_vector = Column(JSON, nullable=True)  # Вектор эмбеддинга в формате JSON
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, onupdate=func.now())
+    
+    content = relationship("Content")
+    department = relationship("Department")
+
+class RAGSession(Base):
+    __tablename__ = "rag_sessions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    department_id = Column(Integer, ForeignKey("department.id"), nullable=False)
+    is_initialized = Column(Boolean, default=False)  # Инициализирована ли RAG система для отдела
+    documents_count = Column(Integer, default=0)  # Количество документов в системе
+    chunks_count = Column(Integer, default=0)  # Количество чанков в векторной БД
+    last_updated = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    department = relationship("Department")

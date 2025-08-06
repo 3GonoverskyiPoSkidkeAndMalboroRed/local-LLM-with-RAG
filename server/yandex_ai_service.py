@@ -139,6 +139,67 @@ class YandexAIService:
 Проанализировав предоставленные документы:"""
 
         return await self.generate_text(prompt, model, max_tokens)
+    
+    async def get_embedding(self, text: str, model: str = "text-search-doc") -> list:
+        """
+        Получение эмбеддинга для текста через Yandex Cloud ML SDK
+        
+        Args:
+            text: Текст для создания эмбеддинга
+            model: Модель для эмбеддингов (text-search-doc, text-search-query)
+            
+        Returns:
+            Список чисел - вектор эмбеддинга
+        """
+        try:
+            if not self.api_key:
+                raise ValueError("API ключ не установлен")
+            
+            if not self.folder_id:
+                raise ValueError("Folder ID не установлен")
+            
+            # Получаем модель эмбеддингов
+            embedding_model = self.ml_client.models.text_embeddings(model)
+            
+            # Создаем эмбеддинг
+            response = await embedding_model.run(text=text)
+            
+            # Извлекаем вектор эмбеддинга
+            if hasattr(response, 'embedding'):
+                return response.embedding
+            elif hasattr(response, 'vector'):
+                return response.vector
+            elif hasattr(response, 'data') and response.data:
+                return response.data
+            else:
+                logger.warning(f"Неизвестная структура ответа эмбеддинга: {response}")
+                # Возвращаем пустой вектор как заглушку
+                return [0.0] * 256
+                
+        except Exception as e:
+            logger.error(f"Ошибка при создании эмбеддинга: {e}")
+            # Возвращаем пустой вектор при ошибке
+            return [0.0] * 256
+    
+    async def generate_response(self, prompt: str) -> str:
+        """
+        Упрощенный метод для генерации ответа (возвращает только текст)
+        
+        Args:
+            prompt: Промпт для генерации
+            
+        Returns:
+            Сгенерированный текст
+        """
+        try:
+            result = await self.generate_text(prompt)
+            if result and result.get("success"):
+                return result.get("text", "")
+            else:
+                return "Извините, произошла ошибка при генерации ответа."
+        except Exception as e:
+            logger.error(f"Ошибка в generate_response: {e}")
+            return "Извините, произошла ошибка при генерации ответа."
 
 # Глобальный экземпляр сервиса
 yandex_ai_service = YandexAIService()
