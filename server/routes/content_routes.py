@@ -611,10 +611,20 @@ async def list_department_files(department_id: int):
             file_path = os.path.join(department_path, filename)
             if os.path.isfile(file_path):
                 file_size = os.path.getsize(file_path)
+                # Форматируем размер файла
+                if file_size < 1024:
+                    size_formatted = f"{file_size} Б"
+                elif file_size < 1024 * 1024:
+                    size_formatted = f"{file_size / 1024:.1f} КБ"
+                elif file_size < 1024 * 1024 * 1024:
+                    size_formatted = f"{file_size / (1024 * 1024):.1f} МБ"
+                else:
+                    size_formatted = f"{file_size / (1024 * 1024 * 1024):.1f} ГБ"
+                
                 files.append({
                     "name": filename,
                     "size": file_size,
-                    "size_formatted": f"{file_size} bytes"
+                    "size_formatted": size_formatted
                 })
         
         return {
@@ -628,6 +638,105 @@ async def list_department_files(department_id: int):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении списка файлов: {str(e)}")
+
+@router.delete("/delete-file/{department_id}/{filename}")
+async def delete_department_file(department_id: int, filename: str):
+    """
+    Удаляет конкретный файл из директории отдела.
+    """
+    try:
+        # Формируем путь к файлу
+        department_path = f"/app/files/ContentForDepartment/{department_id}"
+        file_path = os.path.join(department_path, filename)
+        
+        # Проверяем, существует ли директория
+        if not os.path.exists(department_path):
+            raise HTTPException(status_code=404, detail=f"Директория для отдела {department_id} не существует")
+        
+        # Проверяем, существует ли файл
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"Файл {filename} не найден в директории отдела {department_id}")
+        
+        # Удаляем файл
+        os.remove(file_path)
+        
+        # Также удаляем запись из базы данных, если она существует
+        from database import get_db
+        from sqlalchemy.orm import Session
+        db = next(get_db())
+        try:
+            content = db.query(Content).filter(
+                Content.department_id == department_id,
+                Content.file_path.like(f"%{filename}")
+            ).first()
+            
+            if content:
+                db.delete(content)
+                db.commit()
+        except Exception as db_error:
+            print(f"Ошибка при удалении записи из БД: {db_error}")
+        finally:
+            db.close()
+        
+        return {"message": f"Файл {filename} успешно удален из директории отдела {department_id}"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении файла: {str(e)}")
+
+@router.delete("/delete-all-files/{department_id}")
+async def delete_all_department_files(department_id: int):
+    """
+    Удаляет все файлы из директории отдела.
+    """
+    try:
+        # Формируем путь к директории отдела
+        department_path = f"/app/files/ContentForDepartment/{department_id}"
+        
+        # Проверяем, существует ли директория
+        if not os.path.exists(department_path):
+            raise HTTPException(status_code=404, detail=f"Директория для отдела {department_id} не существует")
+        
+        # Получаем список файлов
+        files_to_delete = []
+        for filename in os.listdir(department_path):
+            file_path = os.path.join(department_path, filename)
+            if os.path.isfile(file_path):
+                files_to_delete.append((filename, file_path))
+        
+        if not files_to_delete:
+            return {"message": f"В директории отдела {department_id} нет файлов для удаления"}
+        
+        # Удаляем все файлы
+        deleted_count = 0
+        for filename, file_path in files_to_delete:
+            try:
+                os.remove(file_path)
+                deleted_count += 1
+            except Exception as e:
+                print(f"Ошибка при удалении файла {filename}: {e}")
+        
+        # Также удаляем записи из базы данных
+        from database import get_db
+        from sqlalchemy.orm import Session
+        db = next(get_db())
+        try:
+            contents = db.query(Content).filter(Content.department_id == department_id).all()
+            for content in contents:
+                db.delete(content)
+            db.commit()
+        except Exception as db_error:
+            print(f"Ошибка при удалении записей из БД: {db_error}")
+        finally:
+            db.close()
+        
+        return {"message": f"Удалено {deleted_count} файлов из директории отдела {department_id}"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении файлов: {str(e)}")
 
 @router.get("/list-all-departments")
 async def list_all_departments():
