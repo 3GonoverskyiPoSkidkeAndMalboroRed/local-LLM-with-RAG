@@ -12,10 +12,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Копирование файлов зависимостей
-COPY requirements.txt .
+COPY requirements_no_version.txt .
 
 # Установка зависимостей Python
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements_no_version.txt
 
 # Создание директории для Yandex Cloud конфигурации
 RUN mkdir -p /app/yandex-cloud-config
