@@ -35,10 +35,31 @@ class GenerateTextResponse(BaseModel):
 async def generate_text(request: GenerateTextRequest):
     """
     Генерация текста с помощью Yandex GPT через Yandex Cloud ML SDK
+    
+    Использует стандартный системный промпт для профессионального ассистента.
     """
     try:
+        # Стандартный системный промпт для профессионального ассистента
+        system_prompt = """### Инструкция:
+Ты — профессиональный ассистент, который помогает пользователям с различными задачами.
+
+### Правила работы:
+1. Давай точные и полезные ответы
+2. Будь вежливым и профессиональным
+3. Если не знаешь ответ — честно скажи об этом
+4. Структурируй ответы для лучшего понимания
+5. Используй примеры, когда это уместно
+
+### Запрос пользователя:
+{prompt}
+
+### Ответ:
+"""
+        # Формируем полный промпт с системными инструкциями
+        full_prompt = system_prompt.format(prompt=request.prompt)
+        
         result = await yandex_ai_service.generate_text(
-            prompt=request.prompt,
+            prompt=full_prompt,
             model=request.model,
             max_tokens=request.max_tokens,
             temperature=request.temperature
