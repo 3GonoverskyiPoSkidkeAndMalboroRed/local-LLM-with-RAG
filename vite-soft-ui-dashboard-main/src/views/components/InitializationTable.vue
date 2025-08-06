@@ -204,19 +204,43 @@
                    <p class="text-success">{{ departmentFiles.message }}</p>
                    <p><strong>Путь:</strong> {{ departmentFiles.path }}</p>
                    <div v-if="departmentFiles.files.length > 0">
-                     <h6>Список файлов ({{ departmentFiles.total_files }}):</h6>
+                     <div class="d-flex justify-content-between align-items-center mb-3">
+                       <h6 class="mb-0">Список файлов ({{ departmentFiles.total_files }}):</h6>
+                       <button 
+                         class="btn btn-warning btn-sm" 
+                         @click="deleteAllFiles"
+                         :disabled="deletingFiles.length > 0"
+                         title="Удалить все файлы"
+                       >
+                         <i class="fas fa-trash-alt"></i>
+                         Удалить все файлы
+                       </button>
+                     </div>
                      <div class="table-responsive">
                        <table class="table table-striped">
                          <thead>
                            <tr>
                              <th>Имя файла</th>
                              <th>Размер</th>
+                             <th>Действия</th>
                            </tr>
                          </thead>
                          <tbody>
                            <tr v-for="file in departmentFiles.files" :key="file.name">
                              <td>{{ file.name }}</td>
                              <td>{{ file.size_formatted }}</td>
+                             <td>
+                               <button 
+                                 class="btn btn-danger btn-sm" 
+                                 @click="deleteFile(file.name)"
+                                 :disabled="deletingFiles.includes(file.name)"
+                                 title="Удалить файл"
+                               >
+                                 <span v-if="deletingFiles.includes(file.name)" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                 <i v-else class="fas fa-trash"></i>
+                                 {{ deletingFiles.includes(file.name) ? 'Удаление...' : 'Удалить' }}
+                               </button>
+                             </td>
                            </tr>
                          </tbody>
                        </table>
@@ -289,7 +313,8 @@ export default {
        departmentFiles: null,
        viewMessage: '',
        viewStatus: false,
-       isLoadingFiles: false
+       isLoadingFiles: false,
+       deletingFiles: [] // Новый массив для отслеживания удаляемых файлов
     };
   },
   methods: {
@@ -493,6 +518,48 @@ export default {
         console.error('Ошибка загрузки файлов:', error);
       } finally {
                  this.isUploading = false;
+       }
+     },
+     
+     // Метод для удаления файла
+     async deleteFile(fileName) {
+       if (!confirm(`Вы уверены, что хотите удалить файл "${fileName}"?`)) {
+         return;
+       }
+       
+       this.deletingFiles.push(fileName);
+       try {
+         const response = await axios.delete(`${import.meta.env.VITE_API_URL}/content/delete-file/${this.viewForm.departmentId}/${encodeURIComponent(fileName)}`);
+         this.departmentFiles.files = this.departmentFiles.files.filter(f => f.name !== fileName);
+         this.viewMessage = `Файл "${fileName}" успешно удален!`;
+         this.viewStatus = true;
+       } catch (error) {
+         this.viewMessage = `Ошибка удаления файла "${fileName}": ` + (error.response?.data?.detail || error.message);
+         this.viewStatus = false;
+         console.error('Ошибка удаления файла:', error);
+       } finally {
+         this.deletingFiles = this.deletingFiles.filter(f => f !== fileName);
+       }
+     },
+     
+     // Метод для удаления всех файлов в директории
+     async deleteAllFiles() {
+       if (!confirm('Вы уверены, что хотите удалить все файлы в этой директории? Это действие необратимо.')) {
+         return;
+       }
+       
+       this.deletingFiles = this.departmentFiles.files.map(f => f.name); // Заполняем массив именами файлов для удаления
+       try {
+         const response = await axios.delete(`${import.meta.env.VITE_API_URL}/content/delete-all-files/${this.viewForm.departmentId}`);
+         this.departmentFiles.files = []; // Очищаем список файлов в компоненте
+         this.viewMessage = 'Все файлы успешно удалены!';
+         this.viewStatus = true;
+       } catch (error) {
+         this.viewMessage = 'Ошибка удаления файлов: ' + (error.response?.data?.detail || error.message);
+         this.viewStatus = false;
+         console.error('Ошибка удаления файлов:', error);
+       } finally {
+         this.deletingFiles = []; // Очищаем массив для отслеживания удаляемых файлов
        }
      },
      
