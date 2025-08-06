@@ -63,7 +63,7 @@ app.include_router(yandex_ai_router)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Настройки подключения к базе данных
-DATABASE_URL = "mysql+mysqlconnector://root:123123@localhost:3306/db_test"
+DATABASE_URL = os.environ.get("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3306/db_test")
 
 # Создание движка и сессии
 engine = create_engine(DATABASE_URL)
@@ -214,12 +214,12 @@ async def get_access_levels(db: Session = Depends(get_db)):
     return [{"id": access_level.id, "access_name": access_level.access_name} for access_level in access_levels]
 
 @app.get("/departments")
-async def get_departments(db: Session = Depends(get_db)):
+async def get_departments_list(db: Session = Depends(get_db)):
     departments = db.query(Department).all()
     return [{"id": dept.id, "name": dept.department_name} for dept in departments]
 
 @app.get("/access-levels")
-async def get_access_level(db: Session = Depends(get_db)):
+async def get_access_levels_list(db: Session = Depends(get_db)):
     access_levels = db.query(Access).all()
     return [{"id": access.id, "access_name": access.access_name} for access in access_levels]
 
