@@ -3,7 +3,7 @@
     <!-- Навигация по подвкладкам -->
     <ul class="nav nav-pills mb-3" id="llmTabs" role="tablist">
       <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="init-llm-tab" data-bs-toggle="pill" data-bs-target="#init-llm" type="button" role="tab" aria-controls="init-llm" aria-selected="true">Инициализация LLM</button>
+        <button class="nav-link active" id="init-rag-tab" data-bs-toggle="pill" data-bs-target="#init-rag" type="button" role="tab" aria-controls="init-rag" aria-selected="true">Инициализация RAG</button>
       </li>
       <li class="nav-item" role="presentation">
         <button class="nav-link" id="create-dir-tab" data-bs-toggle="pill" data-bs-target="#create-dir" type="button" role="tab" aria-controls="create-dir" aria-selected="false">Создание директории</button>
@@ -18,44 +18,103 @@
     
     <!-- Содержимое подвкладок -->
     <div class="tab-content" id="llmTabsContent">
-      <!-- Вкладка инициализации LLM -->
-      <div class="tab-pane fade show active" id="init-llm" role="tabpanel" aria-labelledby="init-llm-tab">
-        <form @submit.prevent="initializeLLM">
-          <div class="row">
-            <div class="col-md-6 mb-3">
-              <label for="model-name" class="form-label">Модель LLM</label>
-              <input type="text" class="form-control" id="model-name" v-model="initializeForm.model_name" required placeholder="Введите модель LLM">
-            </div>
-            <div class="col-md-6 mb-3">
-              <label for="embedding-model" class="form-label">Модель эмбеддингов</label>
-              <input type="text" class="form-control" id="embedding-model" v-model="initializeForm.embedding_model_name" required placeholder="Введите модель эмбеддингов">
-            </div>
+      <!-- Вкладка инициализации RAG -->
+      <div class="tab-pane fade show active" id="init-rag" role="tabpanel" aria-labelledby="init-rag-tab">
+        <div class="card">
+          <div class="card-header pb-0">
+            <h6>Инициализация RAG системы с Yandex Cloud ML</h6>
+            <p class="text-sm mb-0">Создание векторной базы данных для поиска по документам отдела</p>
           </div>
-          <div class="row">
-            <div class="col-12 mb-3">
-              <label for="department-id" class="form-label">Идентификатор отдела</label>
-              <input type="number" class="form-control" id="department-id" v-model="initializeForm.department_id" required min="1" placeholder="Например: 5">
-              <small class="text-muted">Укажите идентификатор отдела. Документы будут автоматически загружены из папки ContentForDepartment/{ID отдела}</small>
-            </div>
-          </div>
-          <div class="row mb-3">
-            <div class="col-12">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="confirm-init" v-model="initializeForm.confirm">
-                <label class="form-check-label" for="confirm-init">
-                  Я подтверждаю, что хочу инициализировать LLM. Это может занять некоторое время.
-                </label>
+          <div class="card-body">
+            <form @submit.prevent="initializeRAG">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label for="rag-department-select" class="form-label">Отдел для инициализации RAG</label>
+                  <select class="form-control" id="rag-department-select" v-model="ragForm.departmentId" required>
+                    <option value="">Выберите отдел</option>
+                    <option v-for="dept in departments" :key="dept.id" :value="dept.id">
+                      {{ dept.department_name }}
+                    </option>
+                  </select>
+                  <small class="text-muted">Выберите отдел для создания RAG системы</small>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Параметры инициализации</label>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" v-model="ragForm.forceReload" id="force-reload-rag">
+                    <label class="form-check-label" for="force-reload-rag">
+                      Принудительная перезагрузка
+                    </label>
+                    <small class="form-text text-muted d-block">Удалить существующие данные и создать заново</small>
+                  </div>
+                </div>
               </div>
+              
+              <div class="row mb-3">
+                <div class="col-12">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="confirm-rag-init" v-model="ragForm.confirm">
+                    <label class="form-check-label" for="confirm-rag-init">
+                      Я подтверждаю, что хочу инициализировать RAG систему. Это может занять некоторое время.
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="row">
+                <div class="col-md-12">
+                  <button 
+                    type="submit" 
+                    class="btn btn-primary" 
+                    :disabled="!ragForm.departmentId || !ragForm.confirm || ragInitializing"
+                  >
+                    <span v-if="ragInitializing" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    {{ ragInitializing ? 'Инициализация RAG...' : 'Инициализировать RAG' }}
+                  </button>
+                  
+                  <button 
+                    type="button"
+                    class="btn btn-info ms-2" 
+                    @click="checkRAGStatus" 
+                    :disabled="!ragForm.departmentId"
+                  >
+                    Проверить статус
+                  </button>
+                  
+                  <button 
+                    type="button"
+                    class="btn btn-warning ms-2" 
+                    @click="resetRAG" 
+                    :disabled="!ragForm.departmentId"
+                  >
+                    Сбросить RAG
+                  </button>
+                </div>
+              </div>
+            </form>
+            
+            <!-- Сообщения о результате -->
+            <div v-if="ragMessage" class="alert mt-3" :class="ragStatus ? 'alert-success' : 'alert-danger'">
+              {{ ragMessage }}
+            </div>
+            
+            <!-- Статус RAG системы -->
+            <div v-if="ragStatusInfo" class="alert alert-info mt-3">
+              <h6>Статус RAG системы для отдела "{{ ragStatusInfo.department_name }}":</h6>
+              <ul class="mb-0">
+                <li>Инициализирована: {{ ragStatusInfo.is_initialized ? 'Да' : 'Нет' }}</li>
+                <li>Документов в БД: {{ ragStatusInfo.documents_in_db }}</li>
+                <li>Документов в векторной БД: {{ ragStatusInfo.documents_in_vector_store }}</li>
+                <li v-if="ragStatusInfo.needs_reinitialization" class="text-warning">
+                  ⚠️ Требуется реинициализация (количество документов не совпадает)
+                </li>
+                <li v-if="ragStatusInfo.last_updated">
+                  Последнее обновление: {{ new Date(ragStatusInfo.last_updated).toLocaleString() }}
+                </li>
+              </ul>
             </div>
           </div>
-          <button type="submit" class="btn btn-info" :disabled="!initializeForm.confirm || isInitializing">
-            <span v-if="isInitializing" class="spinner-border spinner-border-sm me-2" role="status" aria-visible="true"></span>
-            {{ isInitializing ? 'Инициализация...' : 'Инициализировать LLM' }}
-          </button>
-          <div v-if="initializeMessage" :class="['alert', initializeStatus ? 'alert-success' : 'alert-danger', 'mt-3']">
-            {{ initializeMessage }}
-          </div>
-        </form>
+        </div>
       </div>
       
       <!-- Вкладка создания директории -->
@@ -193,16 +252,17 @@ export default {
   name: 'LLMInitialization',
   data() {
     return {
-      // Данные для инициализации LLM
-      initializeForm: {
-        model_name: '',
-        embedding_model_name: '',
-        confirm: false,
-        department_id: null
+      // Данные для инициализации RAG
+      ragForm: {
+        departmentId: '',
+        forceReload: false,
+        confirm: false
       },
-      initializeMessage: '',
-      initializeStatus: false,
-      isInitializing: false,
+      ragInitializing: false,
+      ragMessage: '',
+      ragStatus: false,
+      ragStatusInfo: null,
+      departments: [], // Список отделов
       
       // Данные для создания директории
       directoryForm: {
@@ -233,50 +293,93 @@ export default {
     };
   },
   methods: {
-    async initializeLLM() {
-      if (!this.initializeForm.confirm) {
-        this.initializeMessage = 'Пожалуйста, подтвердите инициализацию';
-        this.initializeStatus = false;
+    // Методы для работы с RAG
+    async initializeRAG() {
+      if (!this.ragForm.departmentId) {
+        this.ragMessage = 'Выберите отдел для инициализации';
+        this.ragStatus = false;
         return;
       }
       
-      this.isInitializing = true;
-      this.initializeMessage = 'Идет инициализация LLM, это может занять некоторое время...';
-      this.initializeStatus = true;
+      if (!this.ragForm.confirm) {
+        this.ragMessage = 'Пожалуйста, подтвердите инициализацию';
+        this.ragStatus = false;
+        return;
+      }
       
       try {
-        const modelName = this.initializeForm.model_name.trim();
-        const embeddingModelName = this.initializeForm.embedding_model_name.trim();
-        const departmentId = this.initializeForm.department_id;
+        this.ragInitializing = true;
+        this.ragMessage = '';
         
-        if (!departmentId) {
-          this.initializeMessage = 'ID отдела не может быть пустым';
-          this.initializeStatus = false;
-          this.isInitializing = false;
-          return;
+        const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-rag/initialize`, {
+          department_id: this.ragForm.departmentId,
+          force_reload: this.ragForm.forceReload
+        });
+        
+        this.ragMessage = response.data.message;
+        this.ragStatus = response.data.success;
+        
+        if (response.data.success) {
+          this.ragForm.confirm = false;
+          // Автоматически проверяем статус через несколько секунд
+          setTimeout(() => {
+            this.checkRAGStatus();
+          }, 3000);
         }
         
-        // Автоматически используем ID отдела как путь к документам
-        const documentsPath = departmentId.toString();
-        
-        const requestData = {
-          model_name: modelName,
-          embedding_model_name: embeddingModelName,
-          documents_path: documentsPath,
-          department_id: departmentId.toString()
-        };
-        
-        const response = await axios.post(`${import.meta.env.VITE_API_URL}/llm/initialize`, requestData);
-        
-        this.initializeMessage = `LLM для отдела ${departmentId} успешно инициализирован! Документы загружены из папки ContentForDepartment/${departmentId}`;
-        this.initializeStatus = true;
-        this.initializeForm.confirm = false;
       } catch (error) {
-        this.initializeMessage = 'Ошибка инициализации LLM: ' + (error.response?.data?.detail || error.message);
-        this.initializeStatus = false;
-        console.error('Ошибка инициализации LLM:', error);
+        console.error('Ошибка при инициализации RAG:', error);
+        this.ragMessage = error.response?.data?.detail || 'Ошибка при инициализации RAG';
+        this.ragStatus = false;
       } finally {
-        this.isInitializing = false;
+        this.ragInitializing = false;
+      }
+    },
+    
+    async checkRAGStatus() {
+      if (!this.ragForm.departmentId) {
+        this.ragMessage = 'Выберите отдел для проверки статуса';
+        this.ragStatus = false;
+        return;
+      }
+      
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/yandex-rag/status/${this.ragForm.departmentId}`);
+        
+        this.ragStatusInfo = response.data;
+        this.ragMessage = 'Статус RAG системы обновлен';
+        this.ragStatus = true;
+        
+      } catch (error) {
+        console.error('Ошибка при проверке статуса RAG:', error);
+        this.ragMessage = error.response?.data?.detail || 'Ошибка при проверке статуса RAG';
+        this.ragStatus = false;
+        this.ragStatusInfo = null;
+      }
+    },
+    
+    async resetRAG() {
+      if (!this.ragForm.departmentId) {
+        this.ragMessage = 'Выберите отдел для сброса RAG';
+        this.ragStatus = false;
+        return;
+      }
+      
+      if (!confirm('Вы уверены, что хотите сбросить RAG систему для этого отдела? Это удалит всю векторную базу данных.')) {
+        return;
+      }
+      
+      try {
+        const response = await axios.delete(`${import.meta.env.VITE_API_URL}/api/yandex-rag/reset/${this.ragForm.departmentId}`);
+        
+        this.ragMessage = response.data.message;
+        this.ragStatus = response.data.success;
+        this.ragStatusInfo = null;
+        
+      } catch (error) {
+        console.error('Ошибка при сбросе RAG:', error);
+        this.ragMessage = error.response?.data?.detail || 'Ошибка при сбросе RAG';
+        this.ragStatus = false;
       }
     },
     
@@ -418,15 +521,30 @@ export default {
        } finally {
          this.isLoadingFiles = false;
        }
+     },
+     
+     // Загрузка списка отделов
+     async loadDepartments() {
+       try {
+         const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/departments`);
+         this.departments = response.data;
+       } catch (error) {
+         console.error('Ошибка при загрузке отделов:', error);
+         this.ragMessage = 'Ошибка при загрузке списка отделов';
+         this.ragStatus = false;
+       }
      }
    },
-  mounted() {
+  async mounted() {
     // Инициализация Bootstrap компонентов
     const tabElements = document.querySelectorAll('#llmTabs [data-bs-toggle="pill"]');
     tabElements.forEach(tabElement => {
       new bootstrap.Tab(tabElement);
     });
-  }
+    
+    // Загружаем список отделов
+    await this.loadDepartments();
+  },
 };
 </script>
 

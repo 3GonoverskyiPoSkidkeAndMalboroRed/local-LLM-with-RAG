@@ -7,7 +7,20 @@ logger = logging.getLogger(__name__)
 
 class YandexAIService:
     def __init__(self):
-        # Используем новый Yandex Cloud ML SDK
+        # Инициализируем параметры
+        self.api_key = None
+        self.folder_id = None
+        self.ml_client = None
+        self._initialized = False
+        
+        # Загружаем переменные окружения
+        self._load_environment_vars()
+        
+        # Инициализируем SDK
+        self._initialize_sdk()
+    
+    def _load_environment_vars(self):
+        """Загружает переменные окружения"""
         self.api_key = os.getenv('YANDEX_API_KEY') or os.getenv('YC_API_KEY')
         self.folder_id = os.getenv('YANDEX_FOLDER_ID') or os.getenv('YC_FOLDER_ID')
         
@@ -16,12 +29,30 @@ class YandexAIService:
         
         if not self.folder_id:
             logger.warning("YANDEX_FOLDER_ID не установлен. Некоторые функции могут быть недоступны.")
-        
-        # Инициализируем async клиент
-        self.ml_client = AsyncYCloudML(
-            folder_id=self.folder_id,
-            auth=self.api_key
-        )
+    
+    def _initialize_sdk(self):
+        """Инициализирует Yandex Cloud ML SDK"""
+        if self.api_key and self.folder_id:
+            try:
+                self.ml_client = AsyncYCloudML(
+                    folder_id=self.folder_id,
+                    auth=self.api_key
+                )
+                self._initialized = True
+                logger.info("Yandex Cloud ML SDK успешно инициализирован")
+            except Exception as e:
+                logger.error(f"Ошибка инициализации Yandex Cloud ML SDK: {e}")
+                self.ml_client = None
+                self._initialized = False
+        else:
+            logger.warning("Yandex Cloud ML SDK не инициализирован - отсутствуют необходимые параметры")
+            self._initialized = False
+    
+    def _ensure_initialized(self):
+        """Проверяет и при необходимости переинициализирует SDK"""
+        if not self._initialized:
+            self._load_environment_vars()
+            self._initialize_sdk()
     
     async def generate_text(self, 
                            prompt: str, 
@@ -41,11 +72,11 @@ class YandexAIService:
             Dict с результатом генерации или None при ошибке
         """
         try:
-            if not self.api_key:
-                raise ValueError("API ключ не установлен")
+            # Убеждаемся, что SDK инициализирован
+            self._ensure_initialized()
             
-            if not self.folder_id:
-                raise ValueError("Folder ID не установлен")
+            if not self.ml_client:
+                raise ValueError("Yandex Cloud ML SDK не инициализирован")
             
             # Получаем модель и настраиваем её
             model_instance = self.ml_client.models.completions(model)
@@ -152,11 +183,12 @@ class YandexAIService:
             Список чисел - вектор эмбеддинга
         """
         try:
-            if not self.api_key:
-                raise ValueError("API ключ не установлен")
+            # Убеждаемся, что SDK инициализирован
+            self._ensure_initialized()
             
-            if not self.folder_id:
-                raise ValueError("Folder ID не установлен")
+            if not self.ml_client:
+                logger.warning("Yandex Cloud ML SDK не инициализирован, возвращаем пустой эмбеддинг")
+                return [0.0] * 256
             
             # Получаем модель эмбеддингов
             embedding_model = self.ml_client.models.text_embeddings(model)
