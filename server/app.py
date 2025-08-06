@@ -39,6 +39,14 @@ from routes.user_routes import router as user_router
 from routes.feedback_routes import router as feedback_router
 from yandex_cloud_config import yandex_cloud_config
 from routes.yandex_ai_routes import router as yandex_ai_router
+from routes.yandex_rag_routes import router as yandex_rag_router
+
+# Выполняем миграцию при запуске
+try:
+    from migrations.create_rag_tables import run_migration
+    run_migration()
+except Exception as e:
+    print(f"⚠️  Ошибка при выполнении миграции RAG таблиц: {e}")
 
 # Инициализация глобальных переменных
 app = FastAPI()
@@ -59,6 +67,7 @@ app.include_router(content_router)
 app.include_router(user_router)
 app.include_router(feedback_router)
 app.include_router(yandex_ai_router)
+app.include_router(yandex_rag_router)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
