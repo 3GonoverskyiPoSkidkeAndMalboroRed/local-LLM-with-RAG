@@ -2,6 +2,7 @@ import os
 from typing import Optional
 from yandexcloud import SDK
 import logging
+from yandex_config import YANDEX_FOLDER_ID, YANDEX_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class YandexCloudConfig:
                 self.sdk = SDK()
                 logger.info("Yandex Cloud SDK инициализирован с переменными окружения")
             
-            self.folder_id = folder_id or os.getenv('YANDEX_FOLDER_ID') or os.getenv('YC_FOLDER_ID')
+            self.folder_id = folder_id or os.getenv('YANDEX_FOLDER_ID') or os.getenv('YC_FOLDER_ID') or YANDEX_FOLDER_ID
             self.cloud_id = cloud_id or os.getenv('YC_CLOUD_ID')
             
             if not self.sdk:

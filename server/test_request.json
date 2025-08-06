@@ -1,0 +1,6 @@
+{
+  "prompt": "Привет",
+  "model": "yandexgpt-lite",
+  "max_tokens": 1000,
+  "temperature": 0.6
+} 

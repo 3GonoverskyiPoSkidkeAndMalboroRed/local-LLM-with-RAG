@@ -1,15 +1,17 @@
 import os
+import json
+import aiohttp
 from typing import Dict, Any, Optional
-from yandex_cloud_ml_sdk import AsyncYCloudML
 import logging
+from yandex_config import YANDEX_API_KEY, YANDEX_FOLDER_ID
 
 logger = logging.getLogger(__name__)
 
 class YandexAIService:
     def __init__(self):
-        # Используем новый Yandex Cloud ML SDK
-        self.api_key = os.getenv('YANDEX_API_KEY') or os.getenv('YC_API_KEY')
-        self.folder_id = os.getenv('YANDEX_FOLDER_ID') or os.getenv('YC_FOLDER_ID')
+        # Используем HTTP API напрямую
+        self.api_key = os.getenv('YANDEX_API_KEY') or os.getenv('YC_API_KEY') or YANDEX_API_KEY
+        self.folder_id = os.getenv('YANDEX_FOLDER_ID') or os.getenv('YC_FOLDER_ID') or YANDEX_FOLDER_ID
         
         if not self.api_key:
             logger.warning("YANDEX_API_KEY не установлен. Некоторые функции могут быть недоступны.")
@@ -17,11 +19,8 @@ class YandexAIService:
         if not self.folder_id:
             logger.warning("YANDEX_FOLDER_ID не установлен. Некоторые функции могут быть недоступны.")
         
-        # Инициализируем async клиент
-        self.ml_client = AsyncYCloudML(
-            folder_id=self.folder_id,
-            auth=self.api_key
-        )
+        # URL для Yandex Cloud AI API
+        self.api_url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
     
     async def generate_text(self, 
                            prompt: str, 
@@ -47,32 +46,59 @@ class YandexAIService:
             if not self.folder_id:
                 raise ValueError("Folder ID не установлен")
             
-            # Используем новый SDK для генерации
-            response = await self.ml_client.generate(
-                prompt=prompt,
-                model=model,
-                max_tokens=max_tokens,
-                temperature=temperature
-            )
-            
-            logger.info(f"Успешная генерация текста с моделью {model}")
-            return {
-                "success": True,
-                "text": response.text,
-                "model": model,
-                "usage": response.usage if hasattr(response, 'usage') else {},
-                "finish_reason": response.finish_reason if hasattr(response, 'finish_reason') else "",
-                "sdk_used": True,
-                "sdk_type": "yandex-cloud-ml-sdk"
+            # Используем HTTP API для генерации
+            headers = {
+                "Authorization": f"Api-Key {self.api_key}",
+                "Content-Type": "application/json"
             }
+            
+            data = {
+                "modelUri": f"gpt://{self.folder_id}/{model}",
+                "completionOptions": {
+                    "maxTokens": max_tokens,
+                    "temperature": temperature
+                },
+                "messages": [
+                    {
+                        "role": "user",
+                        "text": prompt
+                    }
+                ]
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.api_url, headers=headers, json=data) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        
+                        # Извлекаем текст из ответа
+                        if "result" in result and "alternatives" in result["result"]:
+                            text = result["result"]["alternatives"][0]["message"]["text"]
+                            usage = result.get("usage", {})
+                            
+                            logger.info(f"Успешная генерация текста с моделью {model}")
+                            return {
+                                "success": True,
+                                "text": text,
+                                "model": model,
+                                "usage": usage,
+                                "finish_reason": "stop",
+                                "sdk_used": False,
+                                "sdk_type": "http-api"
+                            }
+                        else:
+                            raise ValueError("Неожиданная структура ответа от API")
+                    else:
+                        error_text = await response.text()
+                        raise ValueError(f"API вернул статус {response.status}: {error_text}")
                 
         except Exception as e:
             logger.error(f"Ошибка при генерации текста: {e}")
             return {
                 "success": False,
                 "error": str(e),
-                "sdk_used": True,
-                "sdk_type": "yandex-cloud-ml-sdk"
+                "sdk_used": False,
+                "sdk_type": "http-api"
             }
     
     async def generate_with_context(self, 
