@@ -7,7 +7,7 @@ from langchain_community.document_loaders import (
 import os
 from typing import List, Tuple
 from langchain_core.documents import Document
-from langchain_ollama import OllamaEmbeddings
+# from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import time
@@ -24,7 +24,7 @@ TEXT_SPLITTER = RecursiveCharacterTextSplitter(
     separators=["\n\n", "\n", ". ", " ", ""]  # Более точные разделители
 )
 # Получение URL для Ollama из переменной окружения или использование значения по умолчанию
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 20):
     """
@@ -189,165 +189,170 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     Returns:
         Chroma: Векторная база данных с загруженными документами.
     """
-    print(f"DEBUG: Начало load_documents_into_database")
-    print(f"DEBUG: model_name={model_name}, documents_path={documents_path}, department_id={department_id}, reload={reload}")
     
-    # ВСЕГДА создаем директорию ContentForDepartment для отдела, если она не существует
-    content_department_path = f"/app/files/ContentForDepartment/{department_id}"
-    if not os.path.exists(content_department_path):
-        print(f"Создаем директорию для документов отдела {department_id}: {content_department_path}")
-        os.makedirs(content_department_path, exist_ok=True)
-        
-        # Если директория пуста, создаем пустой файл README.md
-        if not os.listdir(content_department_path):
-            readme_path = os.path.join(content_department_path, "README.md")
-            with open(readme_path, 'w') as f:
-                f.write("# Директория для документов\n\nЭта директория создана для хранения документов для RAG.")
-            print(f"Создан файл README.md в {content_department_path}")
-    else:
-        print(f"Директория для документов отдела {department_id} уже существует: {content_department_path}")
-    
-    # Определяем директорию для хранения данных в зависимости от отдела
-    department_directory = f"{PERSIST_DIRECTORY}/{department_id}"
-    print(f"DEBUG: department_directory={department_directory}")
-
-    # Создаем директорию для хранения данных, если она не существует
-    os.makedirs(PERSIST_DIRECTORY, exist_ok=True)
-    os.makedirs(department_directory, exist_ok=True)
-
-    # Проверяем существует ли директория для хранения данных
-    if os.path.exists(department_directory) and not reload:
-        print(f"Загрузка существующей базы данных Chroma для отдела {department_id}...")
-        db = Chroma(
-            embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
-            persist_directory=department_directory
-        )
-        return db
-    
-    # Если нужно перезагрузить документы или директория не существует
-    print(f"Загрузка документов для отдела {department_id}...")
-    
-    # Автоматически формируем путь на основе ID отдела
-    print(f"DEBUG: Исходный documents_path: {documents_path}")
-    if not documents_path.startswith('/app/files/'):
-        # Если передан просто ID отдела или название, формируем полный путь
-        if documents_path.isdigit():
-            # Если передан только ID отдела, используем стандартную структуру
-            documents_path = f"/app/files/ContentForDepartment/{documents_path}"
-            print(f"DEBUG: Сформирован путь для отдела: {documents_path}")
-        else:
-            # Если передан путь, добавляем префикс
-            documents_path = f"/app/files/{documents_path}"
-            print(f"DEBUG: Добавлен префикс к пути: {documents_path}")
-    else:
-        print(f"DEBUG: Путь уже содержит /app/files/: {documents_path}")
-    
-    # Проверяем существование пути к документам
-    if not os.path.exists(documents_path):
-        print(f"Путь к документам не существует: {documents_path}")
-        print(f"Текущая директория: {os.getcwd()}")
-        print(f"Содержимое директории /app/files/: {os.listdir('/app/files/') if os.path.exists('/app/files/') else 'директория не существует'}")
-        
-        # Создаем директорию, если она не существует
-        try:
-            os.makedirs(documents_path, exist_ok=True)
-            print(f"Создана директория: {documents_path}")
-            
-            # Если директория пуста, создаем пустой файл README.md
-            readme_path = os.path.join(documents_path, "README.md")
-            if not os.listdir(documents_path):
-                with open(readme_path, 'w') as f:
-                    f.write("# Директория для документов\n\nЭта директория создана для хранения документов для RAG.")
-                print(f"Создан файл README.md в {documents_path}")
-        except Exception as e:
-            print(f"Ошибка при создании директории: {e}")
-            raise FileNotFoundError(f"Не удалось создать директорию: {documents_path}. Ошибка: {e}")
-    
-    try:
-        print(f"DEBUG: Загружаем документы из: {documents_path}")
-        raw_documents = load_documents(documents_path)
-        print(f"DEBUG: Загружено {len(raw_documents)} документов")
-        for i, doc in enumerate(raw_documents[:3]):  # Показываем первые 3 документа
-            source = doc.metadata.get('source', 'unknown') if hasattr(doc, 'metadata') else 'unknown'
-            print(f"DEBUG: Документ {i+1}: {source}")
-    except Exception as e:
-        print(f"Ошибка при загрузке документов: {e}")
-        # Если нет документов, создаем пустую базу
-        return Chroma.from_documents(
-            documents=[],
-            embedding=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
-            persist_directory=department_directory
-        )
-    
-    # Если директория для хранения существует, получаем список уже загруженных файлов
-    loaded_files = set()
-    if os.path.exists(department_directory):
-        try:
-            db = Chroma(
-                embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
-                persist_directory=department_directory
-            )
-            # Получаем список файлов, которые уже есть в базе
-            all_docs = db.get()
-            if all_docs and all_docs.get('metadatas'):
-                for metadata in all_docs['metadatas']:
-                    if metadata and 'source' in metadata:
-                        loaded_files.add(metadata['source'])
-            print(f"Уже загружено {len(loaded_files)} файлов")
-        except Exception as e:
-            print(f"Ошибка при попытке получить список загруженных файлов: {e}")
-            # Если произошла ошибка, считаем что нет загруженных файлов
-            loaded_files = set()
-    
-    # Фильтруем только новые документы
-    new_documents = []
-    for doc in raw_documents:
-        if hasattr(doc, 'metadata') and 'source' in doc.metadata:
-            if doc.metadata['source'] not in loaded_files:
-                new_documents.append(doc)
-        else:
-            # Если у документа нет метаданных о источнике, добавляем его
-            new_documents.append(doc)
-    
-    print(f"Найдено {len(new_documents)} новых документов из {len(raw_documents)} всего")
-    
-    if not new_documents:
-        print("Нет новых документов для загрузки")
-        # Возвращаем существующую базу данных
-        if os.path.exists(department_directory):
-            return Chroma(
-                embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
-                persist_directory=department_directory
-            )
-        # Если директории нет, но и новых документов нет - создаем пустую базу
-        return Chroma.from_documents(
-            documents=[],
-            embedding=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
-            persist_directory=department_directory
-        )
-    
-    # Разбиваем новые документы на чанки
-    documents = TEXT_SPLITTER.split_documents(new_documents)
-    print(f"Разбито на {len(documents)} чанков")
-    
-    # Создаем встраивания и загружаем в Chroma
-    print("Создание встраиваний и загрузка документов в Chroma...")
-    
-    # Если директория существует, добавляем к существующей базе
-    if os.path.exists(department_directory):
-        db = Chroma(
-            embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
-            persist_directory=department_directory
-        )
-        db.add_documents(documents)
-        return db
-    else:
-        # Иначе создаем новую базу
-        return Chroma.from_documents(
-            documents=documents,
-            embedding=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
-            persist_directory=department_directory
-        )
+    # ВРЕМЕННО ОТКЛЮЧЕНО: Ollama отключена, функция не может работать без embedding модели
+    print(f"ПРЕДУПРЕЖДЕНИЕ: load_documents_into_database временно отключена (Ollama отключена)")
+    print(f"Запрошенные параметры: model_name={model_name}, documents_path={documents_path}, department_id={department_id}")
+    return None
+    # print(f"DEBUG: Начало load_documents_into_database")
+    # print(f"DEBUG: model_name={model_name}, documents_path={documents_path}, department_id={department_id}, reload={reload}")
+    # 
+    # # ВСЕГДА создаем директорию ContentForDepartment для отдела, если она не существует
+    # content_department_path = f"/app/files/ContentForDepartment/{department_id}"
+    # if not os.path.exists(content_department_path):
+    #     print(f"Создаем директорию для документов отдела {department_id}: {content_department_path}")
+    #     os.makedirs(content_department_path, exist_ok=True)
+    #     
+    #     # Если директория пуста, создаем пустой файл README.md
+    #     if not os.listdir(content_department_path):
+    #         readme_path = os.path.join(content_department_path, "README.md")
+    #         with open(readme_path, 'w') as f:
+    #             f.write("# Директория для документов\n\nЭта директория создана для хранения документов для RAG.")
+    #         print(f"Создан файл README.md в {content_department_path}")
+    # else:
+    #     print(f"Директория для документов отдела {department_id} уже существует: {content_department_path}")
+    # 
+    # # Определяем директорию для хранения данных в зависимости от отдела
+    # department_directory = f"{PERSIST_DIRECTORY}/{department_id}"
+    # print(f"DEBUG: department_directory={department_directory}")
+    #
+    # # Создаем директорию для хранения данных, если она не существует
+    # os.makedirs(PERSIST_DIRECTORY, exist_ok=True)
+    # os.makedirs(department_directory, exist_ok=True)
+    #
+    # # Проверяем существует ли директория для хранения данных
+    # if os.path.exists(department_directory) and not reload:
+    #     print(f"Загрузка существующей базы данных Chroma для отдела {department_id}...")
+    #     db = Chroma(
+    #         embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+    #         persist_directory=department_directory
+    #     )
+    #     return db
+    # 
+    # # Если нужно перезагрузить документы или директория не существует
+    # print(f"Загрузка документов для отдела {department_id}...")
+    # 
+    # # Автоматически формируем путь на основе ID отдела
+    # print(f"DEBUG: Исходный documents_path: {documents_path}")
+    # if not documents_path.startswith('/app/files/'):
+    #     # Если передан просто ID отдела или название, формируем полный путь
+    #     if documents_path.isdigit():
+    #         # Если передан только ID отдела, используем стандартную структуру
+    #         documents_path = f"/app/files/ContentForDepartment/{documents_path}"
+    #         print(f"DEBUG: Сформирован путь для отдела: {documents_path}")
+    #     else:
+    #         # Если передан путь, добавляем префикс
+    #         documents_path = f"/app/files/{documents_path}"
+    #         print(f"DEBUG: Добавлен префикс к пути: {documents_path}")
+    # else:
+    #     print(f"DEBUG: Путь уже содержит /app/files/: {documents_path}")
+    # 
+    # # Проверяем существование пути к документам
+    # if not os.path.exists(documents_path):
+    #     print(f"Путь к документам не существует: {documents_path}")
+    #     print(f"Текущая директория: {os.getcwd()}")
+    #     print(f"Содержимое директории /app/files/: {os.listdir('/app/files/') if os.path.exists('/app/files/') else 'директория не существует'}")
+    #     
+    #     # Создаем директорию, если она не существует
+    #     try:
+    #         os.makedirs(documents_path, exist_ok=True)
+    #         print(f"Создана директория: {documents_path}")
+    #         
+    #         # Если директория пуста, создаем пустой файл README.md
+    #         readme_path = os.path.join(documents_path, "README.md")
+    #         if not os.listdir(documents_path):
+    #             with open(readme_path, 'w') as f:
+    #                 f.write("# Директория для документов\n\nЭта директория создана для хранения документов для RAG.")
+    #             print(f"Создан файл README.md в {documents_path}")
+    #     except Exception as e:
+    #         print(f"Ошибка при создании директории: {e}")
+    #         raise FileNotFoundError(f"Не удалось создать директорию: {documents_path}. Ошибка: {e}")
+    # 
+    # try:
+    #     print(f"DEBUG: Загружаем документы из: {documents_path}")
+    #     raw_documents = load_documents(documents_path)
+    #     print(f"DEBUG: Загружено {len(raw_documents)} документов")
+    #     for i, doc in enumerate(raw_documents[:3]):  # Показываем первые 3 документа
+    #         source = doc.metadata.get('source', 'unknown') if hasattr(doc, 'metadata') else 'unknown'
+    #         print(f"DEBUG: Документ {i+1}: {source}")
+    # except Exception as e:
+    #     print(f"Ошибка при загрузке документов: {e}")
+    #     # Если нет документов, создаем пустую базу
+    #     return Chroma.from_documents(
+    #         documents=[],
+    #         embedding=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+    #         persist_directory=department_directory
+    #     )
+    # 
+    # # Если директория для хранения существует, получаем список уже загруженных файлов
+    # loaded_files = set()
+    # if os.path.exists(department_directory):
+    #     try:
+    #         db = Chroma(
+    #             embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+    #             persist_directory=department_directory
+    #         )
+    #         # Получаем список файлов, которые уже есть в базе
+    #         all_docs = db.get()
+    #         if all_docs and all_docs.get('metadatas'):
+    #             for metadata in all_docs['metadatas']:
+    #                 if metadata and 'source' in metadata:
+    #                     loaded_files.add(metadata['source'])
+    #         print(f"Уже загружено {len(loaded_files)} файлов")
+    #     except Exception as e:
+    #         print(f"Ошибка при попытке получить список загруженных файлов: {e}")
+    #         # Если произошла ошибка, считаем что нет загруженных файлов
+    #         loaded_files = set()
+    # 
+    # # Фильтруем только новые документы
+    # new_documents = []
+    # for doc in raw_documents:
+    #     if hasattr(doc, 'metadata') and 'source' in doc.metadata:
+    #         if doc.metadata['source'] not in loaded_files:
+    #             new_documents.append(doc)
+    #     else:
+    #         # Если у документа нет метаданных о источнике, добавляем его
+    #         new_documents.append(doc)
+    # 
+    # print(f"Найдено {len(new_documents)} новых документов из {len(raw_documents)} всего")
+    # 
+    # if not new_documents:
+    #     print("Нет новых документов для загрузки")
+    #     # Возвращаем существующую базу данных
+    #     if os.path.exists(department_directory):
+    #         return Chroma(
+    #             embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+    #             persist_directory=department_directory
+    #         )
+    #     # Если директории нет, но и новых документов нет - создаем пустую базу
+    #     return Chroma.from_documents(
+    #         documents=[],
+    #         embedding=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+    #         persist_directory=department_directory
+    #     )
+    # 
+    # # Разбиваем новые документы на чанки
+    # documents = TEXT_SPLITTER.split_documents(new_documents)
+    # print(f"Разбито на {len(documents)} чанков")
+    # 
+    # # Создаем встраивания и загружаем в Chroma
+    # print("Создание встраиваний и загрузка документов в Chroma...")
+    # 
+    # # Если директория существует, добавляем к существующей базе
+    # if os.path.exists(department_directory):
+    #     db = Chroma(
+    #         embedding_function=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+    #         persist_directory=department_directory
+    #     )
+    #     db.add_documents(documents)
+    #     return db
+    # else:
+    #     # Иначе создаем новую базу
+    #     return Chroma.from_documents(
+    #         documents=documents,
+    #         embedding=OllamaEmbeddings(model=model_name, base_url=OLLAMA_HOST),
+    #         persist_directory=department_directory
+    #     )
 
 
 def load_documents(path: str) -> List[Document]:

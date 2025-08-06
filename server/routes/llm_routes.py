@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
-from langchain_ollama import ChatOllama
+# from langchain_ollama import ChatOllama
 import traceback
 import time
 import asyncio
@@ -66,13 +66,13 @@ class InitRequest(BaseModel):
     documents_path: str
     department_id: str = "default"
 
-class GenerateRequest(BaseModel):
-    messages: str
-    model: str = "gemma3"
+# class GenerateRequest(BaseModel):
+#     messages: str
+#     model: str = "gemma3"
 
-class GenerateResponse(BaseModel):
-    text: str
-    model: str = "gemma3"
+# class GenerateResponse(BaseModel):
+#     text: str
+#     model: str = "gemma3"
 
 class QueueStatusResponse(BaseModel):
     department_id: str
@@ -388,37 +388,37 @@ async def debug_reinitialize_department(department_id: str):
     except Exception as e:
         return {"error": str(e), "traceback": traceback.format_exc()}
 
-@router.post("/generate", response_model=GenerateResponse)
-async def generate(request: GenerateRequest):
-    """
-    Генерирует ответ на запрос без использования RAG.
-    """
-    try:
-        # Проверяем, доступна ли модель
-        llm_state_manager.check_if_model_is_available(request.model)
-        
-        # Создаем экземпляр модели
-        llm = ChatOllama(model=request.model)
-        
-        # Отправляем запрос напрямую к модели без использования RAG
-        response = llm.invoke(request.messages)
-        
-        # Извлекаем ответ из объекта response
-        if hasattr(response, "content"):
-            response_text = response.content
-        else:
-            response_text = str(response)
-            
-        return GenerateResponse(text=response_text, model=request.model)
-    except Exception as e:
-        error_message = f"Ошибка при обработке запроса на генерацию: {str(e)}"
-        print(error_message)
-        print(traceback.format_exc())
-        # Вместо ошибки 500 возвращаем ответ с сообщением об ошибке
-        return GenerateResponse(
-            text=f"Произошла ошибка при генерации ответа. Пожалуйста, попробуйте позже или переформулируйте вопрос. Детали: {str(e)}",
-            model=request.model
-        )
+# @router.post("/generate", response_model=GenerateResponse)
+# async def generate(request: GenerateRequest):
+#     """
+#     Генерирует ответ на запрос без использования RAG.
+#     """
+#     try:
+#         # Проверяем, доступна ли модель
+#         llm_state_manager.check_if_model_is_available(request.model)
+#         
+#         # Создаем экземпляр модели
+#         llm = ChatOllama(model=request.model)
+#         
+#         # Отправляем запрос напрямую к модели без использования RAG
+#         response = llm.invoke(request.messages)
+#         
+#         # Извлекаем ответ из объекта response
+#         if hasattr(response, "content"):
+#             response_text = response.content
+#         else:
+#             response_text = str(response)
+#             
+#         return GenerateResponse(text=response_text, model=request.model)
+#     except Exception as e:
+#         error_message = f"Ошибка при обработке запроса на генерацию: {str(e)}"
+#         print(error_message)
+#         print(traceback.format_exc())
+#         # Вместо ошибки 500 возвращаем ответ с сообщением об ошибке
+#         return GenerateResponse(
+#             text=f"Произошла ошибка при генерации ответа. Пожалуйста, попробуйте позже или переформулируйте вопрос. Детали: {str(e)}",
+#             model=request.model
+#         )
 
 @router.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest, background_tasks: BackgroundTasks):

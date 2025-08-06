@@ -11,14 +11,14 @@ import threading
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from datetime import datetime
-from langchain_ollama import ChatOllama, OllamaEmbeddings
+# from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 
 from document_loader import load_documents_into_database
 from llm import getChatChain, getAsyncChatChain
 
 # Получение URL для Ollama из переменной окружения
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 @dataclass
 class QueryTask:
@@ -156,10 +156,10 @@ class LLMStateManager:
                 self.department_databases[department_id] = department_db
                 
                 # Инициализируем модель встраивания для векторного поиска
-                embedding_model = OllamaEmbeddings(
-                    model=embedding_model_name, base_url=OLLAMA_HOST
-                )
-                self.department_embedding_models[department_id] = embedding_model
+                # embedding_model = OllamaEmbeddings(
+                #     model=embedding_model_name, base_url=OLLAMA_HOST
+                # )
+                # self.department_embedding_models[department_id] = embedding_model
                 
                 # Создаем семафор для отдела, если его еще нет  
                 if department_id not in self.department_semaphores:
@@ -178,31 +178,35 @@ class LLMStateManager:
             print(f"Ошибка при загрузке документов: {e}")
             return False
 
-        try:
-            print("Создание LLM...")
-            llm = ChatOllama(
-                model=llm_model_name, 
-                base_url=OLLAMA_HOST,
-                temperature=0.05,  # Минимальная креативность = максимальная скорость
-                num_predict=256,  # Еще меньше токенов = быстрее генерация
-                top_k=5,  # Минимум вариантов = максимум скорости
-                top_p=0.8,  # Более строгая фокусировка
-                repeat_penalty=1.1,  # Избегаем повторений
-                num_thread=8,  # Используем больше потоков CPU
-                num_batch=1  # Минимальный batch для скорости
-            )
-            department_chat = getChatChain(llm, self.department_databases[department_id])
-            department_async_chat = getAsyncChatChain(llm, self.department_databases[department_id])
-            
-            # Используем глобальную блокировку для обновления словарей chats
-            with self.global_lock:
-                self.department_chats[department_id] = department_chat
-                self.department_async_chats[department_id] = department_async_chat
-            
-            print(f"LLM для отдела {department_id} успешно инициализирован.")
-        except Exception as e:
-            print(f"Ошибка при создании LLM: {e}")
-            return False
+        # try:
+        #     print("Создание LLM...")
+        #     llm = ChatOllama(
+        #         model=llm_model_name, 
+        #         base_url=OLLAMA_HOST,
+        #         temperature=0.05,  # Минимальная креативность = максимальная скорость
+        #         num_predict=256,  # Еще меньше токенов = быстрее генерация
+        #         top_k=5,  # Минимум вариантов = максимум скорости
+        #         top_p=0.8,  # Более строгая фокусировка
+        #         repeat_penalty=1.1,  # Избегаем повторений
+        #         num_thread=8,  # Используем больше потоков CPU
+        #         num_batch=1  # Минимальный batch для скорости
+        #     )
+        #     department_chat = getChatChain(llm, self.department_databases[department_id])
+        #     department_async_chat = getAsyncChatChain(llm, self.department_databases[department_id])
+        #     
+        #     # Используем глобальную блокировку для обновления словарей chats
+        #     with self.global_lock:
+        #         self.department_chats[department_id] = department_chat
+        #         self.department_async_chats[department_id] = department_async_chat
+        #     
+        #     print(f"LLM для отдела {department_id} успешно инициализирован.")
+        # except Exception as e:
+        #     print(f"Ошибка при создании LLM: {e}")
+        #     return False
+        
+        # Временно возвращаем False, так как Ollama отключена
+        print("Ollama отключена. LLM инициализация пропущена.")
+        return False
 
         return True
     
@@ -269,7 +273,7 @@ class LLMStateManager:
         with self.global_lock:
             return self.department_databases.get(department_id)
     
-    def get_department_embedding_model(self, department_id: str) -> Optional[OllamaEmbeddings]:
+    def get_department_embedding_model(self, department_id: str): # -> Optional[OllamaEmbeddings]:
         """Получает модель встраивания для отдела"""
         with self.global_lock:
             return self.department_embedding_models.get(department_id)

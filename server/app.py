@@ -1,4 +1,4 @@
-from langchain_ollama import ChatOllama, OllamaEmbeddings
+# from langchain_ollama import ChatOllama, OllamaEmbeddings
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, APIRouter
 from pydantic import BaseModel
 import uvicorn
@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Получение URL для Ollama из переменной окружения или использование значения по умолчанию
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 from sqlalchemy import create_engine, text, inspect, or_
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
@@ -70,13 +70,13 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Добавляем новый класс для запросов на генерацию без RAG
-class GenerateRequest(BaseModel):
-    messages: str
-    model: str = "ilyagusev/saiga_llama3:latest"
+# class GenerateRequest(BaseModel):
+#     messages: str
+#     model: str = "ilyagusev/saiga_llama3:latest"
 
-class GenerateResponse(BaseModel):
-    text: str
-    model: str = "ilyagusev/saiga_llama3:latest"
+# class GenerateResponse(BaseModel):
+#     text: str
+#     model: str = "ilyagusev/saiga_llama3:latest"
 
 # Функции моделей теперь в LLMStateManager
 
