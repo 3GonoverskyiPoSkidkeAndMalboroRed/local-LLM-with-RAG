@@ -255,88 +255,52 @@ export default {
         let response;
         
         if (this.chatMode === "rag") {
-          // Создаем задачу для обработки в режиме с RAG (новый асинхронный API)
-          const taskResponse = await axios.post(`${import.meta.env.VITE_API_URL}/llm/query`, { 
-            question: message,
-            department_id: departmentId
+          // Проверяем статус RAG системы перед отправкой запроса
+          try {
+            const statusResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/yandex-rag/status/${departmentId}`);
+            const ragStatus = statusResponse.data;
+            
+            if (!ragStatus.is_initialized) {
+              this.chatMessages.push({
+                role: 'assistant',
+                content: `⚠️ RAG система для отдела "${ragStatus.department_name}" не инициализирована. Пожалуйста, сначала инициализируйте RAG систему в разделе "Инициализация RAG".`
+              });
+              return;
+            }
+            
+            if (ragStatus.documents_in_db === 0) {
+              this.chatMessages.push({
+                role: 'assistant',
+                content: `⚠️ В отделе "${ragStatus.department_name}" нет документов для поиска. Пожалуйста, добавьте документы в базу знаний.`
+              });
+              return;
+            }
+          } catch (statusError) {
+            console.error("Ошибка при проверке статуса RAG:", statusError);
+            this.chatMessages.push({
+              role: 'assistant',
+              content: '⚠️ Не удалось проверить статус RAG системы. Попробуйте позже.'
+            });
+            return;
+          }
+          
+          // Используем новый эндпоинт Yandex RAG
+          response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-rag/query`, { 
+            department_id: parseInt(departmentId),
+            question: message
           }, {
             noRetry: true
           });
           
-          const taskId = taskResponse.data.task_id;
-          console.log(`Создана задача: ${taskId}`);
-          
-          // Добавляем временное сообщение о статусе
-          const processingMessageIndex = this.chatMessages.length;
+          // Добавляем ответ в чат
           this.chatMessages.push({
             role: 'assistant',
-            content: '🔄 Обрабатываю ваш запрос...',
-            isProcessing: true
+            content: response.data.answer || 'Ответ получен, но содержимое пустое.',
+            sources: response.data.sources || []
           });
           
-          // Опрашиваем статус задачи до завершения
-          let maxAttempts = 60; // Максимум 60 попыток (2 минуты)
-          let attempts = 0;
-          
-          while (attempts < maxAttempts) {
-            attempts++;
-            
-            try {
-              const resultResponse = await axios.get(`${import.meta.env.VITE_API_URL}/llm/query/${taskId}`);
-              const taskResult = resultResponse.data;
-              
-              if (taskResult.status === 'completed') {
-                // Задача завершена успешно
-                this.chatMessages[processingMessageIndex] = {
-                  role: 'assistant',
-                  content: taskResult.answer || 'Ответ получен, но содержимое пустое.',
-                  sources: taskResult.sources || [],
-                  isProcessing: false
-                };
-                break;
-              } else if (taskResult.status === 'failed') {
-                // Задача завершена с ошибкой
-                this.chatMessages[processingMessageIndex] = {
-                  role: 'assistant',
-                  content: `❌ Произошла ошибка при обработке: ${taskResult.error || 'Неизвестная ошибка'}`,
-                  isProcessing: false
-                };
-                break;
-              } else if (taskResult.status === 'processing') {
-                // Задача в обработке, обновляем сообщение
-                this.chatMessages[processingMessageIndex].content = '⚙️ Запрос обрабатывается, пожалуйста подождите...';
-              }
-              
-              // Ждем 2 секунды перед следующей попыткой
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-            } catch (pollError) {
-              console.error("Ошибка при опросе статуса задачи:", pollError);
-              
-              // Если опрос статуса не удался несколько раз подряд
-              if (attempts >= 3) {
-                this.chatMessages[processingMessageIndex] = {
-                  role: 'assistant',
-                  content: `❌ Не удалось получить результат обработки. Попробуйте еще раз.`,
-                  isProcessing: false
-                };
-                break;
-              }
-              
-              await new Promise(resolve => setTimeout(resolve, 2000));
-            }
-          }
-          
-          // Если превышено максимальное количество попыток
-          if (attempts >= maxAttempts) {
-            this.chatMessages[processingMessageIndex] = {
-              role: 'assistant',
-              content: '⏱️ Обработка запроса занимает больше времени, чем ожидалось. Попробуйте позже.',
-              isProcessing: false
-            };
-          }
         } else {
-          // Используем эндпоинт Yandex AI для простого чата (заменили Ollama)
+          // Используем эндпоинт Yandex AI для простого чата
           response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-ai/generate`, {
             prompt: message,
             model: "yandexgpt-lite",
@@ -359,23 +323,24 @@ export default {
         // Определяем сообщение об ошибке в зависимости от режима чата
         let errorMessage = 'Неизвестная ошибка';
         
-        if (this.chatMode === 'simple') {
-          // Для Yandex AI проверяем специфичные поля ошибки
+        if (this.chatMode === 'rag') {
+          // Для Yandex RAG проверяем специфичные поля ошибки
+          errorMessage = error.response?.data?.error || 
+                        error.response?.data?.detail || 
+                        error.message || 
+                        'Ошибка при обращении к Yandex RAG';
+        } else {
+          // Для простого чата с Yandex AI
           errorMessage = error.response?.data?.error || 
                         error.response?.data?.detail || 
                         error.message || 
                         'Ошибка при обращении к Yandex AI';
-        } else {
-          // Для RAG режима используем стандартную обработку
-          errorMessage = error.response?.data?.detail || 
-                        error.message || 
-                        'Ошибка при обработке запроса';
         }
         
         // Добавляем сообщение об ошибке в чат
         this.chatMessages.push({
           role: 'assistant',
-          content: `Произошла ошибка: ${errorMessage}`
+          content: `❌ Произошла ошибка: ${errorMessage}`
         });
       } finally {
         // Очищаем таймаут
