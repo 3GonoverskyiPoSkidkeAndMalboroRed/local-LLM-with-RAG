@@ -47,20 +47,48 @@ class YandexAIService:
             if not self.folder_id:
                 raise ValueError("Folder ID не установлен")
             
-            # Используем новый SDK для генерации
-            response = await self.ml_client.generate(
-                prompt=prompt,
-                model=model,
+            # Получаем модель и настраиваем её
+            model_instance = self.ml_client.models.completions(model)
+            model_instance = model_instance.configure(
                 max_tokens=max_tokens,
                 temperature=temperature
             )
             
+            # Используем новый SDK для генерации
+            response = await model_instance.run(
+                messages=[{"role": "user", "text": prompt}]
+            )
+            
             logger.info(f"Успешная генерация текста с моделью {model}")
+            
+            # Извлекаем текст из ответа
+            text_content = ""
+            if hasattr(response, 'choices') and response.choices:
+                choice = response.choices[0]
+                if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                    text_content = choice.message.content
+                elif hasattr(choice, 'text'):
+                    text_content = choice.text
+            elif hasattr(response, 'text'):
+                text_content = response.text
+            elif hasattr(response, 'content'):
+                text_content = response.content
+            
+            # Преобразуем usage в словарь, если это объект
+            usage_dict = {}
+            if hasattr(response, 'usage') and response.usage:
+                if hasattr(response.usage, '__dict__'):
+                    usage_dict = response.usage.__dict__
+                elif hasattr(response.usage, 'model_dump'):
+                    usage_dict = response.usage.model_dump()
+                else:
+                    usage_dict = {"raw": str(response.usage)}
+            
             return {
                 "success": True,
-                "text": response.text,
+                "text": text_content,
                 "model": model,
-                "usage": response.usage if hasattr(response, 'usage') else {},
+                "usage": usage_dict,
                 "finish_reason": response.finish_reason if hasattr(response, 'finish_reason') else "",
                 "sdk_used": True,
                 "sdk_type": "yandex-cloud-ml-sdk"
