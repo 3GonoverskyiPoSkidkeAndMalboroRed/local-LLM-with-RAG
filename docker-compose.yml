@@ -33,6 +33,12 @@ services:
       - OLLAMA_HOST=http://ollama:11434
       - API_URL=http://backend:8000
       - EXTERNAL_URL=http://nginx:80
+      # Yandex Cloud переменные
+      - YANDEX_API_KEY=${YANDEX_API_KEY}
+      - YC_API_KEY=${YC_API_KEY}
+      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
+      - YC_FOLDER_ID=${YC_FOLDER_ID}
+      - YC_KEY_ID=${YC_KEY_ID}
     depends_on:
       db:
         condition: service_healthy
@@ -47,14 +53,14 @@ services:
     build:
       context: ./vite-soft-ui-dashboard-main
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8081/api}
     ports:
       - "8083:80"
     depends_on:
       - backend
     volumes:
       - ./vite-soft-ui-dashboard-main/nginx.conf:/etc/nginx/conf.d/default.conf
-    environment:
-      - VITE_API_URL=${VITE_API_URL:-http://nginx:80/api}
     networks:
       - app-network
 

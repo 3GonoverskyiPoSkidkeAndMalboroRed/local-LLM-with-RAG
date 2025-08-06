@@ -9,6 +9,10 @@ RUN npm install
 
 COPY . .
 
+# Добавляем ARG для получения переменной во время сборки
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL:-http://localhost:8081/api}
+
 RUN npm run build
 
 # Вторая стадия - использование Nginx для раздачи статических файлов

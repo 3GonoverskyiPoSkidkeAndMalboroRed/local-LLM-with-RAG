@@ -128,8 +128,9 @@ def main(llm_model_name: str, embedding_model_name: str, documents_path: str, de
     # Инициализация Yandex Cloud SDK
     yandex_cloud_initialized = yandex_cloud_config.initialize(
         service_account_key_path=os.getenv('YC_SERVICE_ACCOUNT_KEY_PATH'),
-        folder_id=os.getenv('YC_FOLDER_ID'),
-        cloud_id=os.getenv('YC_CLOUD_ID')
+        folder_id=os.getenv('YANDEX_FOLDER_ID'),
+        cloud_id=os.getenv('YC_CLOUD_ID'),
+        api_key=os.getenv('YANDEX_API_KEY')
     )
     
     if yandex_cloud_initialized:
