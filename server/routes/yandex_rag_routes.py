@@ -18,11 +18,11 @@ router = APIRouter(prefix="/api/yandex-rag", tags=["Yandex RAG"])
 
 # Pydantic модели
 class InitializeRAGRequest(BaseModel):
-    department_id: str
+    department_id: int
     force_reload: bool = False
 
 class RAGQueryRequest(BaseModel):
-    department_id: str
+    department_id: int
     question: str
 
 class RAGResponse(BaseModel):
@@ -30,13 +30,13 @@ class RAGResponse(BaseModel):
     answer: str
     sources: List[Dict[str, Any]] = []
     context_used: int = 0
-    department_id: str = ""
+    department_id: int = 0
     error: Optional[str] = None
 
 class InitializeResponse(BaseModel):
     success: bool
     message: str
-    department_id: str
+    department_id: int
     documents_processed: int = 0
     error: Optional[str] = None
 
@@ -52,12 +52,12 @@ async def initialize_rag_for_department(
     """
     try:
         # Проверяем существование отдела
-        department = db.query(Department).filter(Department.id == int(request.department_id)).first()
+        department = db.query(Department).filter(Department.id == request.department_id).first()
         if not department:
             raise HTTPException(status_code=404, detail=f"Отдел с ID {request.department_id} не найден")
         
         # Проверяем наличие документов для отдела
-        content_count = db.query(Content).filter(Content.department_id == int(request.department_id)).count()
+        content_count = db.query(Content).filter(Content.department_id == request.department_id).count()
         if content_count == 0:
             return InitializeResponse(
                 success=False,
@@ -70,8 +70,7 @@ async def initialize_rag_for_department(
         background_tasks.add_task(
             _initialize_rag_background,
             request.department_id,
-            request.force_reload,
-            db
+            request.force_reload
         )
         
         return InitializeResponse(
@@ -87,21 +86,20 @@ async def initialize_rag_for_department(
         logger.error(f"Ошибка при инициализации RAG: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка при инициализации RAG: {str(e)}")
 
-async def _initialize_rag_background(department_id: str, force_reload: bool, db: Session):
+async def _initialize_rag_background(department_id: int, force_reload: bool):
     """Фоновая задача для инициализации RAG"""
     try:
         logger.info(f"Начинаем инициализацию RAG для отдела {department_id}")
         
-        vector_store = await yandex_rag_service.create_vector_store(
+        result = await yandex_rag_service.initialize_rag(
             department_id=department_id,
-            db=db,
             force_reload=force_reload
         )
         
-        if vector_store:
+        if result.get("success"):
             logger.info(f"RAG успешно инициализирован для отдела {department_id}")
         else:
-            logger.error(f"Не удалось инициализировать RAG для отдела {department_id}")
+            logger.error(f"Не удалось инициализировать RAG для отдела {department_id}: {result.get('message')}")
             
     except Exception as e:
         logger.error(f"Ошибка в фоновой инициализации RAG: {e}")
@@ -113,54 +111,52 @@ async def query_rag(request: RAGQueryRequest, db: Session = Depends(get_db)):
     """
     try:
         # Проверяем существование отдела
-        department = db.query(Department).filter(Department.id == int(request.department_id)).first()
+        department = db.query(Department).filter(Department.id == request.department_id).first()
         if not department:
             raise HTTPException(status_code=404, detail=f"Отдел с ID {request.department_id} не найден")
         
         # Выполняем RAG запрос
-        result = await yandex_rag_service.generate_rag_response(
+        result = await yandex_rag_service.query_rag(
             department_id=request.department_id,
-            question=request.question,
-            db=db
+            question=request.question
         )
         
-        return RAGResponse(**result)
+        return RAGResponse(
+            success=True,
+            answer=result.get("answer", ""),
+            sources=result.get("sources", []),
+            context_used=result.get("context_used", 0),
+            department_id=request.department_id
+        )
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Ошибка при выполнении RAG запроса: {e}")
-        raise HTTPException(status_code=500, detail=f"Ошибка при выполнении RAG запроса: {str(e)}")
+        return RAGResponse(
+            success=False,
+            answer="",
+            sources=[],
+            context_used=0,
+            department_id=request.department_id,
+            error=str(e)
+        )
 
 @router.get("/status/{department_id}")
-async def get_rag_status(department_id: str, db: Session = Depends(get_db)):
+async def get_rag_status(department_id: int, db: Session = Depends(get_db)):
     """
     Проверяет статус RAG системы для отдела
     """
     try:
         # Проверяем существование отдела
-        department = db.query(Department).filter(Department.id == int(department_id)).first()
+        department = db.query(Department).filter(Department.id == department_id).first()
         if not department:
             raise HTTPException(status_code=404, detail=f"Отдел с ID {department_id} не найден")
         
-        # Проверяем наличие векторной БД
-        vector_store = await yandex_rag_service._load_existing_vector_store(department_id)
-        is_initialized = vector_store is not None
+        # Получаем статус RAG системы
+        status = await yandex_rag_service.get_rag_status(department_id)
         
-        # Подсчитываем документы в БД
-        content_count = db.query(Content).filter(Content.department_id == int(department_id)).count()
-        
-        # Подсчитываем документы в векторной БД
-        vector_docs_count = len(vector_store.get('texts', [])) if vector_store else 0
-        
-        return {
-            "department_id": department_id,
-            "department_name": department.department_name,
-            "is_initialized": is_initialized,
-            "documents_in_db": content_count,
-            "documents_in_vector_store": vector_docs_count,
-            "needs_reinitialization": content_count != vector_docs_count
-        }
+        return status
         
     except HTTPException:
         raise
@@ -169,29 +165,27 @@ async def get_rag_status(department_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при проверке статуса RAG: {str(e)}")
 
 @router.delete("/reset/{department_id}")
-async def reset_rag_for_department(department_id: str, db: Session = Depends(get_db)):
+async def reset_rag_for_department(department_id: int, db: Session = Depends(get_db)):
     """
     Сбрасывает RAG систему для отдела (удаляет векторную БД)
     """
     try:
         # Проверяем существование отдела
-        department = db.query(Department).filter(Department.id == int(department_id)).first()
+        department = db.query(Department).filter(Department.id == department_id).first()
         if not department:
             raise HTTPException(status_code=404, detail=f"Отдел с ID {department_id} не найден")
         
-        # Удаляем векторную БД
-        import shutil
-        department_vector_dir = os.path.join(yandex_rag_service.persist_directory, f"dept_{department_id}")
+        # Сбрасываем RAG систему
+        result = await yandex_rag_service.reset_rag(department_id)
         
-        if os.path.exists(department_vector_dir):
-            shutil.rmtree(department_vector_dir)
-            logger.info(f"Векторная БД для отдела {department_id} удалена")
-            
-        return {
-            "success": True,
-            "message": f"RAG система для отдела {department_id} сброшена",
-            "department_id": department_id
-        }
+        if result.get("success"):
+            return {
+                "success": True,
+                "message": result.get("message", f"RAG система для отдела {department_id} сброшена"),
+                "department_id": department_id
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("message", "Ошибка при сбросе RAG"))
         
     except HTTPException:
         raise
@@ -201,7 +195,7 @@ async def reset_rag_for_department(department_id: str, db: Session = Depends(get
 
 @router.get("/search/{department_id}")
 async def search_documents(
-    department_id: str, 
+    department_id: int, 
     query: str, 
     k: int = 5,
     db: Session = Depends(get_db)
@@ -211,18 +205,18 @@ async def search_documents(
     """
     try:
         # Проверяем существование отдела
-        department = db.query(Department).filter(Department.id == int(department_id)).first()
+        department = db.query(Department).filter(Department.id == department_id).first()
         if not department:
             raise HTTPException(status_code=404, detail=f"Отдел с ID {department_id} не найден")
         
-        # Выполняем поиск
-        results = await yandex_rag_service.similarity_search(department_id, query, k)
+        # Выполняем RAG запрос для получения источников
+        result = await yandex_rag_service.query_rag(department_id, query)
         
         return {
             "department_id": department_id,
             "query": query,
-            "results_count": len(results),
-            "results": results
+            "results_count": len(result.get("sources", [])),
+            "results": result.get("sources", [])
         }
         
     except HTTPException:
