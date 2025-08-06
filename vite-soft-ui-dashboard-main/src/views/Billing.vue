@@ -336,10 +336,12 @@ export default {
             };
           }
         } else {
-          // Используем эндпоинт /generate для простого чата
-          response = await axios.post(`${import.meta.env.VITE_API_URL}/llm/generate`, {
-            messages: message,
-            department_id: departmentId // Добавляем department_id в запрос
+          // Используем эндпоинт Yandex AI для простого чата (заменили Ollama)
+          response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-ai/generate`, {
+            prompt: message,
+            model: "yandexgpt-lite",
+            max_tokens: 1000,
+            temperature: 0.6
           }, {
             // Отключаем автоматические повторные попытки для запросов к LLM
             noRetry: true
@@ -354,10 +356,26 @@ export default {
       } catch (error) {
         console.error("Ошибка при отправке сообщения:", error);
         
+        // Определяем сообщение об ошибке в зависимости от режима чата
+        let errorMessage = 'Неизвестная ошибка';
+        
+        if (this.chatMode === 'simple') {
+          // Для Yandex AI проверяем специфичные поля ошибки
+          errorMessage = error.response?.data?.error || 
+                        error.response?.data?.detail || 
+                        error.message || 
+                        'Ошибка при обращении к Yandex AI';
+        } else {
+          // Для RAG режима используем стандартную обработку
+          errorMessage = error.response?.data?.detail || 
+                        error.message || 
+                        'Ошибка при обработке запроса';
+        }
+        
         // Добавляем сообщение об ошибке в чат
         this.chatMessages.push({
           role: 'assistant',
-          content: `Произошла ошибка: ${error.response?.data?.detail || error.message || 'Неизвестная ошибка'}`
+          content: `Произошла ошибка: ${errorMessage}`
         });
       } finally {
         // Очищаем таймаут

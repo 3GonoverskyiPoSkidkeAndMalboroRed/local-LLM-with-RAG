@@ -9,10 +9,10 @@ services:
       - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123123}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-db}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-db_test}
     volumes:  
       - db_data:/var/lib/mysql
-      - ./backup4.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./backup/backup_file.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-123123}"]
       interval: 10s
@@ -28,7 +28,7 @@ services:
     ports:
       - "0.0.0.0:8000:8000"
     environment:
-      - DATABASE_URL=mysql+mysqlconnector://root:${MYSQL_ROOT_PASSWORD:-123123}@db:3306/${MYSQL_DATABASE:-db}
+      - DATABASE_URL=mysql+mysqlconnector://root:${MYSQL_ROOT_PASSWORD:-123123}@db:3306/${MYSQL_DATABASE:-db_test}
       - DEBUG=${DEBUG:-False}
       # - OLLAMA_HOST=http://ollama:11434
       - API_URL=http://backend:8000
