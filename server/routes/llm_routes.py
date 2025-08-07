@@ -164,22 +164,36 @@ async def process_query_task(task_id: str):
             
             # Создаем детальную информацию об источниках
             sources_info = []
+            seen_sources = set()  # Для отслеживания дубликатов
+            
+            print(f"Задача {task_id}: Начинаем формирование источников из {len(detailed_results) if detailed_results else len(top_chunks)} результатов")
             
             # Используем детальные результаты, если они доступны
             if detailed_results:
                 for i, result in enumerate(detailed_results):
                     file_path = result['file_path']
                     file_name = file_path.split('/')[-1] if '/' in file_path else file_path
+                    chunk_content = result['chunk_content']
                     
-                    source_info = SourceInfo(
-                        file_name=file_name,
-                        file_path=file_path,
-                        chunk_content=result['chunk_content'],
-                        chunk_id=f"chunk_{task_id}_{i}",
-                        page_number=result['metadata'].get('page', None),
-                        similarity_score=result['metadata'].get('score', None)
-                    )
-                    sources_info.append(source_info)
+                    # Создаем уникальный ключ для дедупликации
+                    content_preview = chunk_content[:100].lower().strip()
+                    source_key = f"{file_name}_{hash(content_preview)}"
+                    
+                    if source_key not in seen_sources:
+                        seen_sources.add(source_key)
+                        
+                        source_info = SourceInfo(
+                            file_name=file_name,
+                            file_path=file_path,
+                            chunk_content=chunk_content,
+                            chunk_id=f"chunk_{task_id}_{len(sources_info)}",
+                            page_number=result['metadata'].get('page', None),
+                            similarity_score=result['metadata'].get('score', None)
+                        )
+                        sources_info.append(source_info)
+                        print(f"Задача {task_id}: Добавлен источник {len(sources_info)}: {file_name}")
+                    else:
+                        print(f"Задача {task_id}: Пропущен дубликат: {file_name}")
             else:
                 # Fallback к старому методу
                 for i, chunk in enumerate(top_chunks):
@@ -187,15 +201,27 @@ async def process_query_task(task_id: str):
                         file_path = top_files[i]
                         file_name = file_path.split('/')[-1] if '/' in file_path else file_path
                         
-                        source_info = SourceInfo(
-                            file_name=file_name,
-                            file_path=file_path,
-                            chunk_content=chunk,
-                            chunk_id=f"chunk_{task_id}_{i}",
-                            page_number=None,
-                            similarity_score=None
-                        )
-                        sources_info.append(source_info)
+                        # Создаем уникальный ключ для дедупликации
+                        content_preview = chunk[:100].lower().strip()
+                        source_key = f"{file_name}_{hash(content_preview)}"
+                        
+                        if source_key not in seen_sources:
+                            seen_sources.add(source_key)
+                            
+                            source_info = SourceInfo(
+                                file_name=file_name,
+                                file_path=file_path,
+                                chunk_content=chunk,
+                                chunk_id=f"chunk_{task_id}_{len(sources_info)}",
+                                page_number=None,
+                                similarity_score=None
+                            )
+                            sources_info.append(source_info)
+                            print(f"Задача {task_id}: Добавлен источник {len(sources_info)}: {file_name}")
+                        else:
+                            print(f"Задача {task_id}: Пропущен дубликат: {file_name}")
+            
+            print(f"Задача {task_id}: Сформировано {len(sources_info)} уникальных источников")
             
             # Получаем асинхронный экземпляр чата
             async_chat_instance = llm_state_manager.get_department_async_chat(department_id)

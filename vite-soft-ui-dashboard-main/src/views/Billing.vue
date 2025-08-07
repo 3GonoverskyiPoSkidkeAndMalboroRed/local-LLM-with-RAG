@@ -42,6 +42,7 @@
                     <div v-if="message.role === 'assistant' && message.sources && message.sources.length > 0 && chatMode === 'rag' && !message.no_sources_found && !isNoSourcesResponse(message.content)" class="mt-3">
                       <SourceDisplay 
                         :sources="message.sources"
+                        :userQuery="message.userQuery || ''"
                         @show-notification="showNotification"
                         @open-source-modal="openSourceModal"
                       />
@@ -261,7 +262,8 @@ export default {
           this.requestInProgress = false;
           this.chatMessages.push({
             role: 'assistant',
-            content: '⏱️ Обработка запроса занимает больше времени, чем ожидалось. Запрос продолжает обрабатываться на сервере, ответ может прийти позже.'
+            content: '⏱️ Обработка запроса занимает больше времени, чем ожидалось. Запрос продолжает обрабатываться на сервере, ответ может прийти позже.',
+            userQuery: message
           });
         }
       }, 120000);
@@ -278,7 +280,8 @@ export default {
             if (!ragStatus.is_initialized) {
               this.chatMessages.push({
                 role: 'assistant',
-                content: `⚠️ RAG система для отдела "${ragStatus.department_name}" не инициализирована. Пожалуйста, сначала инициализируйте RAG систему в разделе "Инициализация RAG".`
+                content: `⚠️ RAG система для отдела "${ragStatus.department_name}" не инициализирована. Пожалуйста, сначала инициализируйте RAG систему в разделе "Инициализация RAG".`,
+                userQuery: message
               });
               return;
             }
@@ -286,7 +289,8 @@ export default {
             if (ragStatus.documents_in_db === 0) {
               this.chatMessages.push({
                 role: 'assistant',
-                content: `⚠️ В отделе "${ragStatus.department_name}" нет документов для поиска. Пожалуйста, добавьте документы в базу знаний.`
+                content: `⚠️ В отделе "${ragStatus.department_name}" нет документов для поиска. Пожалуйста, добавьте документы в базу знаний.`,
+                userQuery: message
               });
               return;
             }
@@ -294,7 +298,8 @@ export default {
             console.error("Ошибка при проверке статуса RAG:", statusError);
             this.chatMessages.push({
               role: 'assistant',
-              content: '⚠️ Не удалось проверить статус RAG системы. Попробуйте позже.'
+              content: '⚠️ Не удалось проверить статус RAG системы. Попробуйте позже.',
+              userQuery: message
             });
             return;
           }
@@ -312,7 +317,8 @@ export default {
             role: 'assistant',
             content: response.data.answer || 'Ответ получен, но содержимое пустое.',
             sources: response.data.sources || [],
-            no_sources_found: response.data.no_sources_found || false
+            no_sources_found: response.data.no_sources_found || false,
+            userQuery: message // Сохраняем запрос пользователя
           });
           
         } else {
@@ -356,7 +362,8 @@ export default {
         // Добавляем сообщение об ошибке в чат
         this.chatMessages.push({
           role: 'assistant',
-          content: `❌ Произошла ошибка: ${errorMessage}`
+          content: `❌ Произошла ошибка: ${errorMessage}`,
+          userQuery: message // Сохраняем запрос пользователя
         });
       } finally {
         // Очищаем таймаут

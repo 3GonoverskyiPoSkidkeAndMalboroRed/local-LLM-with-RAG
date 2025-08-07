@@ -242,6 +242,9 @@ class YandexRAGService:
             context_parts = []
             sources = []
             unique_sources = {}  # Для отслеживания уникальных источников
+            seen_content = set()  # Для отслеживания дубликатов по содержимому
+            
+            print(f"RAG: Обработка {len(top_chunks)} чанков для формирования источников")
             
             for chunk, similarity in top_chunks:
                 if similarity > 0.3:  # Порог релевантности
@@ -253,8 +256,13 @@ class YandexRAGService:
                         # Создаем уникальный ключ для источника
                         source_key = f"{content.id}_{chunk.chunk_index}"
                         
+                        # Дополнительная проверка на дубликаты по содержимому
+                        content_preview = chunk.chunk_text[:100].lower().strip()
+                        content_hash = hash(content_preview)
+                        content_key = f"{content.id}_{content_hash}"
+                        
                         # Добавляем только уникальные источники
-                        if source_key not in unique_sources:
+                        if source_key not in unique_sources and content_key not in seen_content:
                             unique_sources[source_key] = {
                                 "chunk_id": source_key,
                                 "file_name": content.title,
@@ -263,9 +271,14 @@ class YandexRAGService:
                                 "similarity_score": round(similarity, 3),
                                 "page_number": None  # Можно добавить позже
                             }
+                            seen_content.add(content_key)
+                            print(f"RAG: Добавлен источник: {content.title} (релевантность: {similarity:.3f})")
+                        else:
+                            print(f"RAG: Пропущен дубликат: {content.title}")
             
             # Преобразуем уникальные источники в список
             sources = list(unique_sources.values())
+            print(f"RAG: Сформировано {len(sources)} уникальных источников")
             
             if not context_parts:
                 return {
