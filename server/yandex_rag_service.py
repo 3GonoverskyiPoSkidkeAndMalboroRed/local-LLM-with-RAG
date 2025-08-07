@@ -11,6 +11,8 @@ import PyPDF2
 import docx
 from io import BytesIO
 import re
+import pandas as pd
+from openpyxl import load_workbook
 
 class YandexRAGService:
     def __init__(self):
@@ -297,6 +299,8 @@ class YandexRAGService:
                 return self._extract_text_from_pdf(file_path)
             elif file_extension in ['.docx', '.doc']:
                 return self._extract_text_from_docx(file_path)
+            elif file_extension in ['.xlsx', '.xls']:
+                return self._extract_text_from_excel(file_path)
             elif file_extension == '.txt':
                 with open(file_path, 'r', encoding='utf-8') as file:
                     return file.read()
@@ -330,6 +334,51 @@ class YandexRAGService:
             return text
         except Exception as e:
             print(f"Ошибка извлечения текста из DOCX {file_path}: {e}")
+            return ""
+    
+    def _extract_text_from_excel(self, file_path: str) -> str:
+        """Извлечение текста из Excel файла"""
+        try:
+            # Загружаем рабочую книгу
+            workbook = load_workbook(file_path, data_only=True)
+            
+            text_content = f"=== Excel файл: {os.path.basename(file_path)} ===\n"
+            
+            for sheet_name in workbook.sheetnames:
+                sheet = workbook[sheet_name]
+                text_content += f"\n--- Лист: {sheet_name} ---\n"
+                
+                # Получаем размеры данных
+                max_row = sheet.max_row
+                max_col = sheet.max_column
+                
+                if max_row > 0 and max_col > 0:
+                    # Читаем заголовки
+                    headers = []
+                    for col in range(1, max_col + 1):
+                        cell_value = sheet.cell(row=1, column=col).value
+                        headers.append(str(cell_value) if cell_value is not None else f"Столбец {col}")
+                    
+                    text_content += f"Заголовки: {' | '.join(headers)}\n"
+                    
+                    # Читаем данные (ограничиваем 100 строками для производительности)
+                    for row in range(2, min(max_row + 1, 102)):  # 100 строк данных + заголовки
+                        row_data = []
+                        for col in range(1, max_col + 1):
+                            cell_value = sheet.cell(row=row, column=col).value
+                            row_data.append(str(cell_value) if cell_value is not None else "")
+                        
+                        text_content += f"Строка {row}: {' | '.join(row_data)}\n"
+                    
+                    if max_row > 101:
+                        text_content += f"... и еще {max_row - 101} строк\n"
+                
+                text_content += "\n"
+            
+            return text_content
+            
+        except Exception as e:
+            print(f"Ошибка извлечения текста из Excel {file_path}: {e}")
             return ""
     
     def _split_text_into_chunks(self, text: str) -> List[str]:
