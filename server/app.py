@@ -1,4 +1,3 @@
-# from langchain_ollama import ChatOllama, OllamaEmbeddings
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, APIRouter
 from pydantic import BaseModel
 import uvicorn
@@ -8,8 +7,6 @@ from dotenv import load_dotenv
 # Загружаем переменные окружения из .env файла
 load_dotenv()
 
-# Получение URL для Ollama из переменной окружения или использование значения по умолчанию
-# OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 from sqlalchemy import create_engine, text, inspect, or_
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
@@ -24,16 +21,9 @@ import argparse
 import sys
 from database import get_db
 
-from llm import getChatChain
-# Импортируем централизованный менеджер состояния ПЕРЕД роутерами
-from llm_state_manager import get_llm_state_manager
-
-# Получаем единственный экземпляр менеджера
-llm_state_manager = get_llm_state_manager()
-
 from quiz import router as quiz_router
 from routes.directory_routes import router as directory_router  # Импортируйте ваш маршрутизатор
-from routes.llm_routes import router as llm_router  # Импортируйте ваш маршрутизатор
+
 from routes.content_routes import router as content_router
 from routes.user_routes import router as user_router
 from routes.feedback_routes import router as feedback_router
@@ -62,7 +52,7 @@ app.add_middleware(
 # Добавляем маршрутизатор для тестов и анкет
 app.include_router(quiz_router)
 app.include_router(directory_router)
-app.include_router(llm_router)  # Добавьте маршрутизатор для LL
+
 app.include_router(content_router)
 app.include_router(user_router)
 app.include_router(feedback_router)
@@ -114,26 +104,12 @@ async def check_db_connection():
     finally:
         db.close()
 
-def initialize_llm(llm_model_name: str, embedding_model_name: str, documents_path: str, department_id: str, reload: bool = False) -> bool:
-    """Делегируем инициализацию централизованному менеджеру состояния"""
-    return llm_state_manager.initialize_llm(llm_model_name, embedding_model_name, documents_path, department_id, reload)
-
-def main(llm_model_name: str, embedding_model_name: str, documents_path: str, department_id: str = "default", web_mode: bool = False, port: int = 8000) -> None:
+def main(web_mode: bool = False, port: int = 8000) -> None:
     print("Запуск функции main...")  # Отладочное сообщение
     print(f"Инициализация с параметрами:")  # Отладочное сообщение
-    print(f"  Модель: {llm_model_name}")  # Отладочное сообщение
-    print(f"  Модель встраивания: {embedding_model_name}")  # Отладочное сообщение
-    print(f"  Путь к документам: {documents_path}")  # Отладочное сообщение
-    print(f"  Отдел: {department_id}")  # Отладочное сообщение
     print(f"  Режим веб-сервера: {'включен' if web_mode else 'выключен'}")  # Отладочное сообщение
     print(f"  Порт: {port}")  # Отладочное сообщение
 
-    success = initialize_llm(llm_model_name, embedding_model_name, documents_path, department_id)
-    
-    if not success:
-        print("Не удалось инициализировать LLM. Завершение работы.")
-        sys.exit(1)
-    
     # Инициализация Yandex Cloud SDK
     yandex_cloud_initialized = yandex_cloud_config.initialize(
         service_account_key_path=os.getenv('YC_SERVICE_ACCOUNT_KEY_PATH'),
@@ -152,55 +128,15 @@ def main(llm_model_name: str, embedding_model_name: str, documents_path: str, de
         uvicorn.run(app, host="0.0.0.0", port=port, access_log=True)
         print("Сервер успешно запущен.")  # Отладочное сообщение после запуска сервера
     else:
-        # Консольный режим
-        while True:
-            try:
-                user_input = input(
-                    "\n\nPlease enter your question (or type 'exit' to end): "
-                ).strip()
-                if user_input.lower() == "exit":
-                    break
-                else:
-                    chat_instance = llm_state_manager.get_department_chat(department_id)
-                    if chat_instance:
-                        chat_instance(user_input)
-                    else:
-                        print(f"Чат для отдела {department_id} не инициализирован")
-            
-            except KeyboardInterrupt:
-                break
+        print("Консольный режим больше не поддерживается. Используйте --web для запуска веб-сервера.")
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run local LLM with RAG with Ollama.")
-    parser.add_argument(
-        "-m",
-        "--model",
-        default="gemma3",
-        help="The name of the LLM model to use.",
-    )
-    parser.add_argument(
-        "-e",
-        "--embedding_model",
-        default="nomic-embed-text",
-        help="The name of the embedding model to use.",
-    )
-    parser.add_argument(
-        "-p",
-        "--path",
-        default="Research",
-        help="The path to the directory containing documents to load.",
-    )
-    parser.add_argument(
-        "-d",
-        "--department",
-        default="default",
-        help="The department ID to initialize the chat for.",
-    )
+    parser = argparse.ArgumentParser(description="Run RAG system with Yandex Cloud ML SDK.")
     parser.add_argument(
         "-w",
         "--web",
         action="store_true",
-        help="Run in web server mode instead of console mode.",
+        help="Run in web server mode.",
     )
     parser.add_argument(
         "--port",
@@ -337,13 +273,7 @@ async def get_user_content_by_tags(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении контента: {str(e)}")
 
 
-@app.get("/initialized-departments")
-async def get_initialized_departments():
-    """
-    Возвращает список отделов, для которых уже инициализированы модели LLM.
-    """
-    departments = llm_state_manager.get_initialized_departments()
-    return {"departments": departments}
+
 
 @app.get("/search-documents")
 async def search_documents(
@@ -421,4 +351,4 @@ async def search_documents(
 
 if __name__ == "__main__":
     args = parse_arguments()
-    main(args.model, args.embedding_model, args.path, args.department, args.web, args.port)
+    main(args.web, args.port)

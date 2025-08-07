@@ -1,31 +1,8 @@
-from langchain_community.document_loaders import (
-    DirectoryLoader,
-    PyPDFLoader,
-    TextLoader,
-    Docx2txtLoader,
-    UnstructuredExcelLoader
-)
 import os
 from typing import List, Tuple
-from langchain_core.documents import Document
-# from langchain_ollama import OllamaEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 import time
 import concurrent.futures
 import threading
-
-# Изменяем директорию для хранения данных на /app/files/storage
-PERSIST_DIRECTORY = "/app/files/storage"
-# Улучшенные параметры для лучшего качества RAG
-TEXT_SPLITTER = RecursiveCharacterTextSplitter(
-    chunk_size=1500,  # Увеличиваем размер чанка для лучшего контекста
-    chunk_overlap=200,  # Оптимизируем перекрытие
-    length_function=len,
-    separators=["\n\n", "\n", ". ", " ", ""]  # Более точные разделители
-)
-# Получение URL для Ollama из переменной окружения или использование значения по умолчанию
-# OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 20):
     """
@@ -195,24 +172,12 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
     print(f"Улучшенный векторный поиск успешно завершен за {time.time() - start_time:.2f} секунд")
     return result[0], result[1], result[2] if len(result) > 2 else []
 
-def load_documents_into_database(model_name: str, documents_path: str, department_id: str, reload: bool = True) -> Chroma:
+def load_documents_into_database(model_name: str, documents_path: str, department_id: str, reload: bool = True):
     """
-    Загружает документы из указанной директории в векторную базу данных Chroma
-    после разделения текста на части, создавая базу данных для конкретного отдела.
-
-    Args:
-        model_name (str): Название модели эмбеддинга.
-        documents_path (str): Путь к директории с документами.
-        department_id (str): Идентификатор отдела для создания уникальной базы данных.
-        reload (bool): Нужно ли перезагружать существующие документы. По умолчанию True.
-
-    Returns:
-        Chroma: Векторная база данных с загруженными документами.
+    Функция загрузки документов в базу данных больше не используется.
+    Вместо неё используется Yandex RAG система.
     """
-    
-    # ВРЕМЕННО ОТКЛЮЧЕНО: Ollama отключена, функция не может работать без embedding модели
-    print(f"ПРЕДУПРЕЖДЕНИЕ: load_documents_into_database временно отключена (Ollama отключена)")
-    print(f"Запрошенные параметры: model_name={model_name}, documents_path={documents_path}, department_id={department_id}")
+    print(f"Функция load_documents_into_database больше не используется. Используйте Yandex RAG систему.")
     return None
     # print(f"DEBUG: Начало load_documents_into_database")
     # print(f"DEBUG: model_name={model_name}, documents_path={documents_path}, department_id={department_id}, reload={reload}")
@@ -375,102 +340,18 @@ def load_documents_into_database(model_name: str, documents_path: str, departmen
     #     )
 
 
-def load_documents(path: str) -> List[Document]:
+def load_documents(path: str):
     """
-    Loads documents from the specified directory path.
-
-    This function supports loading of PDF, Markdown, and HTML documents by utilizing
-    different loaders for each file type. It checks if the provided path exists and
-    raises a FileNotFoundError if it does not. It then iterates over the supported
-    file types and uses the corresponding loader to load the documents into a list.
-
-    Args:
-        path (str): The path to the directory containing documents to load.
-
-    Returns:
-        List[Document]: A list of loaded documents.
-
-    Raises:
-        FileNotFoundError: If the specified path does not exist.
+    Функция загрузки документов больше не используется.
+    Вместо неё используется Yandex RAG система.
     """
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"The specified path does not exist: {path}")
+    print(f"Функция load_documents больше не используется. Используйте Yandex RAG систему.")
+    return []
 
-    # Проверяем, есть ли файлы в директории
-    files = os.listdir(path)
-    if not files:
-        print(f"Директория {path} пуста")
-        return []
-
-    loaders = {
-        ".pdf": DirectoryLoader(
-            path,
-            glob="**/*.pdf",
-            loader_cls=PyPDFLoader,
-            show_progress=True,
-            use_multithreading=True,
-        ),
-        ".md": DirectoryLoader(
-            path,
-            glob="**/*.md",
-            loader_cls=TextLoader,
-            show_progress=True,
-        ),
-        ".docx": DirectoryLoader(
-            path,
-            glob="**/*.docx",
-            loader_cls=Docx2txtLoader,
-            show_progress=True,
-        ),
-        ".xlsx": DirectoryLoader(
-            path,
-            glob="**/*.xlsx",
-            loader_cls=UnstructuredExcelLoader,
-            show_progress=True,
-        ),
-        ".xls": DirectoryLoader(
-            path,
-            glob="**/*.xls",
-            loader_cls=UnstructuredExcelLoader,
-            show_progress=True,
-        ),
-    }
-
-    docs = []
-    for file_type, loader in loaders.items():
-        print(f"Loading {file_type} files")
-        try:
-            docs.extend(loader.load())
-        except Exception as e:
-            print(f"Ошибка при загрузке файлов типа {file_type}: {e}")
-    
-    return docs
-
-def rerank_results(query: str, results: List[Document], top_k: int = 5) -> List[Tuple[Document, float]]:
+def rerank_results(query: str, results, top_k: int = 5):
     """
-    Повторно ранжирует результаты на основе дополнительного анализа.
-
-    Args:
-        query (str): Исходный текст запроса.
-        results (List[Document]): Список документов, полученных из векторного поиска.
-        top_k (int): Количество топовых результатов для возврата.
-
-    Returns:
-        List[Tuple[Document, float]]: Список кортежей, содержащих документ и его новый ранг.
+    Функция переранжирования результатов больше не используется.
+    Вместо неё используется Yandex RAG система.
     """
-    # Пример: Используем простую метрику на основе длины совпадения с запросом
-    ranked_results = []
-    for doc in results:
-        # Пример метрики: количество совпадений слов из запроса в документе
-        score = sum(1 for word in query.split() if word in doc.page_content)
-        ranked_results.append((doc, score))
-    
-    # Сортируем результаты по убыванию ранга
-    ranked_results.sort(key=lambda x: x[1], reverse=True)
-    
-    # Возвращаем топовые результаты
-    return ranked_results[:top_k]
-
-# Пример использования
-# results = vec_search(embedding_model, query, db, n_top_cos=10)
-# reranked_results = rerank_results(query, results)
+    print(f"Функция rerank_results больше не используется. Используйте Yandex RAG систему.")
+    return []
