@@ -2,7 +2,8 @@ from langchain_community.document_loaders import (
     DirectoryLoader,
     PyPDFLoader,
     TextLoader,
-    Docx2txtLoader
+    Docx2txtLoader,
+    UnstructuredExcelLoader
 )
 import os
 from typing import List, Tuple
@@ -400,6 +401,18 @@ def load_documents(path: str) -> List[Document]:
             path,
             glob="**/*.docx",
             loader_cls=Docx2txtLoader,
+            show_progress=True,
+        ),
+        ".xlsx": DirectoryLoader(
+            path,
+            glob="**/*.xlsx",
+            loader_cls=UnstructuredExcelLoader,
+            show_progress=True,
+        ),
+        ".xls": DirectoryLoader(
+            path,
+            glob="**/*.xls",
+            loader_cls=UnstructuredExcelLoader,
             show_progress=True,
         ),
     }
