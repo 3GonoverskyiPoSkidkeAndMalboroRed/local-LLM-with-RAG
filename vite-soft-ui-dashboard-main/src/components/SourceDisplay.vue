@@ -244,7 +244,7 @@ export default {
         }
         
         // Бонус за конкретные действия (содержит глаголы)
-        const hasAction = /(заполнит|создает|отражает|проверяет|подписывает|получает)/i.test(trimmed);
+        const hasAction = /(заполнит|создает|отражает|проверяет|подписывает|получает|ронял|делал)/i.test(trimmed);
         if (hasAction) {
           score += 25;
         }
@@ -252,6 +252,18 @@ export default {
         // Бонус за структурированную информацию (содержит цифры или списки)
         const hasStructure = /\d+/.test(trimmed) || trimmed.includes(':');
         if (hasStructure) {
+          score += 20;
+        }
+        
+        // Бонус за имена собственные (содержит заглавные буквы в середине предложения)
+        const hasProperNames = /[А-Я][а-я]+/.test(trimmed);
+        if (hasProperNames) {
+          score += 15;
+        }
+        
+        // Бонус за географические названия (страна, город и т.д.)
+        const hasGeography = /(страна|город|область|регион)/i.test(trimmed);
+        if (hasGeography) {
           score += 20;
         }
         
@@ -263,6 +275,16 @@ export default {
         // Штраф за слишком длинные предложения
         if (trimmed.length > 150) {
           score -= 15;
+        }
+        
+        // Штраф за технические команды (Docker, CMD и т.д.)
+        if (/(cmd|from|run|copy|expose|workdir)/i.test(trimmed)) {
+          score -= 30;
+        }
+        
+        // Штраф за пустые или технические строки
+        if (trimmed.length < 5 || /^[0-9\s\-_]+$/.test(trimmed)) {
+          score -= 50;
         }
         
         if (score > bestScore) {
@@ -279,7 +301,38 @@ export default {
         return bestSentence;
       }
       
-      // Если не нашли подходящее предложение, возвращаем начало
+      // Если не нашли подходящее предложение, ищем лучшее начало
+      return this.findBestStart(text, maxLength);
+    },
+    
+    findBestStart(text, maxLength) {
+      if (!text) return '';
+      
+      // Ищем первое осмысленное предложение
+      const sentences = text.split(/[.!?]+/).filter(sentence => sentence.trim().length > 5);
+      
+      for (let sentence of sentences) {
+        const trimmed = sentence.trim();
+        
+        // Пропускаем технические строки
+        if (/(cmd|from|run|copy|expose|workdir|===|---)/i.test(trimmed)) {
+          continue;
+        }
+        
+        // Пропускаем пустые или числовые строки
+        if (trimmed.length < 5 || /^[0-9\s\-_]+$/.test(trimmed)) {
+          continue;
+        }
+        
+        // Если нашли осмысленное предложение
+        if (trimmed.length <= maxLength) {
+          return trimmed;
+        } else {
+          return this.smartTruncate(trimmed, maxLength);
+        }
+      }
+      
+      // Если ничего не нашли, возвращаем начало текста
       return text.length <= maxLength ? text : text.substring(0, maxLength) + '...';
     },
     
