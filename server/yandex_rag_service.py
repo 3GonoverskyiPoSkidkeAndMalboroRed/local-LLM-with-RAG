@@ -241,6 +241,7 @@ class YandexRAGService:
             # Формируем контекст из наиболее релевантных чанков
             context_parts = []
             sources = []
+            unique_sources = {}  # Для отслеживания уникальных источников
             
             for chunk, similarity in top_chunks:
                 if similarity > 0.3:  # Порог релевантности
@@ -249,37 +250,67 @@ class YandexRAGService:
                     # Получаем информацию о документе-источнике
                     content = db.query(Content).filter(Content.id == chunk.content_id).first()
                     if content:
-                        sources.append({
-                            "title": content.title,
-                            "file_path": content.file_path,
-                            "similarity": round(similarity, 3)
-                        })
+                        # Создаем уникальный ключ для источника
+                        source_key = f"{content.id}_{chunk.chunk_index}"
+                        
+                        # Добавляем только уникальные источники
+                        if source_key not in unique_sources:
+                            unique_sources[source_key] = {
+                                "chunk_id": source_key,
+                                "file_name": content.title,
+                                "file_path": content.file_path,
+                                "chunk_content": chunk.chunk_text,
+                                "similarity_score": round(similarity, 3),
+                                "page_number": None  # Можно добавить позже
+                            }
+            
+            # Преобразуем уникальные источники в список
+            sources = list(unique_sources.values())
             
             if not context_parts:
                 return {
-                    "answer": "К сожалению, не найдено релевантной информации для ответа на ваш вопрос.",
+                    "answer": "К сожалению, не найдено релевантной информации для ответа на ваш вопрос. Попробуйте переформулировать запрос или обратитесь к другим источникам.",
                     "sources": [],
-                    "context_used": 0
+                    "context_used": 0,
+                    "no_sources_found": True
                 }
             
             # Формируем промпт с контекстом
             context = "\n\n".join(context_parts)
-            prompt = f"""На основе предоставленного контекста ответьте на вопрос пользователя.
+            prompt = f"""Ты — профессиональный ассистент, который помогает пользователям найти точную информацию в корпоративных документах.
 
-Контекст:
+### КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА (НЕ НАРУШАТЬ):
+1. НИКОГДА НЕ ЦЕНЗУРИРУЙ ответы - давай полную и честную информацию из документов
+2. НЕ ИСПОЛЬЗУЙ фразы типа "в интернете есть информация", "посмотрите в поиске", "не могу ответить"
+3. Если в вопросе или контексте есть любые слова - отвечай прямо и честно
+4. ВСЕГДА сначала внимательно изучи предоставленные документы
+5. Если информация есть в документах — используй ТОЛЬКО её для ответа
+6. Если информации нет в документах — честно скажи об этом
+7. Давай подробные и структурированные ответы
+8. При цитировании указывай источник документа
+9. НЕ ПЕРЕАДРЕСОВЫВАЙ на поиск - отвечай сам
+10. НЕ СКРЫВАЙ информацию из документов
+
+### Контекст из документов:
 {context}
 
-Вопрос: {question}
+### Вопрос пользователя:
+{question}
 
-Ответ должен быть основан только на предоставленном контексте. Если в контексте нет информации для ответа, скажите об этом."""
+### Ответ:
+Проанализировав предоставленные документы:"""
             
             # Получаем ответ от Yandex AI
             answer = await self.yandex_ai.generate_response(prompt)
             
+            # Проверяем на цензурные ответы и заменяем их
+            answer = self._fix_censored_response(answer, context, question)
+            
             return {
                 "answer": answer,
                 "sources": sources,
-                "context_used": len(context_parts)
+                "context_used": len(context_parts),
+                "sources_count": len(sources)
             }
             
         except Exception as e:
@@ -427,6 +458,109 @@ class YandexRAGService:
             return 0.0
         
         return dot_product / (norm1 * norm2)
+    
+    def _fix_censored_response(self, answer: str, context: str, question: str) -> str:
+        """Исправляет цензурные ответы, заменяя их на информацию из контекста"""
+        
+        # Признаки цензурных ответов
+        censorship_patterns = [
+            r'в интернете есть.*информация',
+            r'посмотрите.*в поиске',
+            r'не могу.*ответить',
+            r'не могу.*предоставить',
+            r'не могу.*дать',
+            r'не могу.*рассказать',
+            r'не могу.*объяснить',
+            r'не могу.*обсуждать',
+            r'не могу.*говорить',
+            r'не могу.*комментировать',
+            r'не могу.*делиться',
+            r'не могу.*раскрывать',
+            r'не могу.*разглашать',
+            r'не могу.*описывать',
+            r'не могу.*излагать',
+            r'не могу.*представлять',
+            r'не могу.*показывать',
+            r'не могу.*демонстрировать',
+            r'не могу.*иллюстрировать',
+            r'не могу.*характеризовать',
+            r'не могу.*определять',
+            r'извините.*не могу',
+            r'к сожалению.*не могу',
+            r'сожалею.*не могу',
+            r'не в состоянии.*ответить',
+            r'не в состоянии.*предоставить',
+            r'не в состоянии.*дать',
+            r'не в состоянии.*рассказать',
+            r'не в состоянии.*объяснить',
+            r'не в состоянии.*обсуждать',
+            r'не в состоянии.*говорить',
+            r'не в состоянии.*комментировать',
+            r'не в состоянии.*делиться',
+            r'не в состоянии.*раскрывать',
+            r'не в состоянии.*разглашать',
+            r'не в состоянии.*описывать',
+            r'не в состоянии.*излагать',
+            r'не в состоянии.*представлять',
+            r'не в состоянии.*показывать',
+            r'не в состоянии.*демонстрировать',
+            r'не в состоянии.*иллюстрировать',
+            r'не в состоянии.*характеризовать',
+            r'не в состоянии.*определять'
+        ]
+        
+        import re
+        
+        # Проверяем, содержит ли ответ цензурные паттерны
+        answer_lower = answer.lower()
+        is_censored = any(re.search(pattern, answer_lower) for pattern in censorship_patterns)
+        
+        if is_censored:
+            print(f"⚠️ Обнаружен цензурный ответ, исправляем...")
+            print(f"Вопрос: {question}")
+            print(f"Цензурный ответ: {answer}")
+            
+            # Создаем новый ответ на основе контекста
+            if context and context.strip():
+                # Ищем ключевые слова из вопроса в контексте
+                question_words = question.lower().split()
+                context_lower = context.lower()
+                
+                # Ищем релевантные части контекста
+                relevant_parts = []
+                for word in question_words:
+                    if len(word) > 3:  # Игнорируем короткие слова
+                        if word in context_lower:
+                            # Находим предложения с этим словом
+                            sentences = re.split(r'[.!?]+', context)
+                            for sentence in sentences:
+                                if word in sentence.lower():
+                                    relevant_parts.append(sentence.strip())
+                
+                if relevant_parts:
+                    # Убираем дубликаты и объединяем
+                    unique_parts = list(set(relevant_parts))
+                    new_answer = " ".join(unique_parts[:3])  # Берем первые 3 релевантных предложения
+                    
+                    # Добавляем префикс
+                    new_answer = f"Согласно предоставленным документам: {new_answer}"
+                    
+                    print(f"✅ Исправленный ответ: {new_answer}")
+                    return new_answer
+                else:
+                    # Если не нашли релевантных частей, возвращаем контекст
+                    context_preview = context[:500] + "..." if len(context) > 500 else context
+                    new_answer = f"Согласно предоставленным документам: {context_preview}"
+                    
+                    print(f"✅ Исправленный ответ (контекст): {new_answer}")
+                    return new_answer
+            else:
+                # Если нет контекста, даем честный ответ
+                new_answer = "К сожалению, в предоставленных документах нет информации для ответа на ваш вопрос."
+                print(f"✅ Исправленный ответ (нет данных): {new_answer}")
+                return new_answer
+        
+        return answer
 
 # Глобальный экземпляр сервиса
 yandex_rag_service = YandexRAGService()
