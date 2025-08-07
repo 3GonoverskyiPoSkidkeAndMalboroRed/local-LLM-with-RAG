@@ -191,14 +191,11 @@ export default {
     getPreviewText(text) {
       if (!text) return '';
       
-      const maxLength = 150;
+      const maxLength = 200; // Увеличиваем длину для лучшего контекста
       
-      // Если запрос пользователя не задан, возвращаем начало текста
+      // Если запрос пользователя не задан, ищем наиболее информативную часть
       if (!this.userQuery || !this.userQuery.trim()) {
-        if (text.length <= maxLength) {
-          return text;
-        }
-        return text.substring(0, maxLength) + '...';
+        return this.findMostInformativePart(text, maxLength);
       }
       
       // Ищем наиболее релевантную часть текста
@@ -208,11 +205,114 @@ export default {
         return relevantPart;
       }
       
-      // Если не нашли релевантную часть, возвращаем начало
-      if (text.length <= maxLength) {
-        return text;
+      // Если не нашли релевантную часть, ищем информативную
+      return this.findMostInformativePart(text, maxLength);
+    },
+    
+    findMostInformativePart(text, maxLength) {
+      if (!text) return '';
+      
+      // Разбиваем текст на предложения
+      const sentences = text.split(/[.!?]+/).filter(sentence => sentence.trim().length > 10);
+      
+      if (sentences.length === 0) {
+        return text.length <= maxLength ? text : text.substring(0, maxLength) + '...';
       }
-      return text.substring(0, maxLength) + '...';
+      
+      // Ищем предложение с наибольшей информативностью
+      let bestSentence = null;
+      let bestScore = 0;
+      
+      sentences.forEach(sentence => {
+        const trimmed = sentence.trim();
+        let score = 0;
+        
+        // Бонус за определения (содержит "—" или "означает")
+        if (trimmed.includes('—') || trimmed.includes('означает') || trimmed.includes('это')) {
+          score += 50;
+        }
+        
+        // Бонус за термины и сокращения
+        if (trimmed.toLowerCase().includes('термины') || trimmed.toLowerCase().includes('сокращения')) {
+          score += 40;
+        }
+        
+        // Бонус за технические термины (содержит аббревиатуры)
+        const hasAbbreviation = /[А-Я]{2,}/.test(trimmed);
+        if (hasAbbreviation) {
+          score += 30;
+        }
+        
+        // Бонус за конкретные действия (содержит глаголы)
+        const hasAction = /(заполнит|создает|отражает|проверяет|подписывает|получает)/i.test(trimmed);
+        if (hasAction) {
+          score += 25;
+        }
+        
+        // Бонус за структурированную информацию (содержит цифры или списки)
+        const hasStructure = /\d+/.test(trimmed) || trimmed.includes(':');
+        if (hasStructure) {
+          score += 20;
+        }
+        
+        // Штраф за слишком короткие предложения
+        if (trimmed.length < 20) {
+          score -= 10;
+        }
+        
+        // Штраф за слишком длинные предложения
+        if (trimmed.length > 150) {
+          score -= 15;
+        }
+        
+        if (score > bestScore) {
+          bestScore = score;
+          bestSentence = trimmed;
+        }
+      });
+      
+      if (bestSentence && bestScore > 0) {
+        // Если предложение слишком длинное, обрезаем его умно
+        if (bestSentence.length > maxLength) {
+          return this.smartTruncate(bestSentence, maxLength);
+        }
+        return bestSentence;
+      }
+      
+      // Если не нашли подходящее предложение, возвращаем начало
+      return text.length <= maxLength ? text : text.substring(0, maxLength) + '...';
+    },
+    
+    smartTruncate(text, maxLength) {
+      // Пытаемся обрезать по границам предложений или фраз
+      const words = text.split(' ');
+      let truncated = '';
+      
+      for (let i = 0; i < words.length; i++) {
+        const testTruncated = words.slice(0, i + 1).join(' ');
+        if (testTruncated.length <= maxLength - 3) {
+          truncated = testTruncated;
+        } else {
+          break;
+        }
+      }
+      
+      if (truncated) {
+        // Проверяем, не обрезали ли мы в середине важной фразы
+        const lastChar = truncated[truncated.length - 1];
+        if (lastChar === '—' || lastChar === ':') {
+          // Ищем конец определения
+          const remainingText = text.substring(truncated.length);
+          const endOfDefinition = remainingText.search(/[.!?]/);
+          if (endOfDefinition !== -1 && endOfDefinition < 50) {
+            truncated += remainingText.substring(0, endOfDefinition + 1);
+          }
+        }
+        
+        return truncated + '...';
+      }
+      
+      return text.substring(0, maxLength - 3) + '...';
     },
     
     findMostRelevantPart(text, query, maxLength) {
@@ -240,6 +340,16 @@ export default {
         
         // Дополнительный бонус за точные совпадения фраз
         if (sentenceLower.includes(query.toLowerCase())) {
+          score += 5;
+        }
+        
+        // Бонус за определения, содержащие запрос
+        if (sentenceLower.includes('—') && queryWords.some(word => sentenceLower.includes(word))) {
+          score += 3;
+        }
+        
+        // Бонус за технические термины
+        if (sentenceLower.includes('термины') || sentenceLower.includes('сокращения')) {
           score += 2;
         }
         
@@ -250,28 +360,10 @@ export default {
       });
       
       if (bestSentence && bestScore > 0) {
-        // Если предложение слишком длинное, обрезаем его
+        // Если предложение слишком длинное, обрезаем его умно
         if (bestSentence.length > maxLength) {
-          // Пытаемся найти лучшее место для обрезки
-          const words = bestSentence.split(' ');
-          let truncated = '';
-          
-          for (let i = 0; i < words.length; i++) {
-            const testTruncated = words.slice(0, i + 1).join(' ');
-            if (testTruncated.length <= maxLength - 3) {
-              truncated = testTruncated;
-            } else {
-              break;
-            }
-          }
-          
-          if (truncated) {
-            return truncated + '...';
-          } else {
-            return bestSentence.substring(0, maxLength - 3) + '...';
-          }
+          return this.smartTruncate(bestSentence, maxLength);
         }
-        
         return bestSentence;
       }
       
@@ -281,8 +373,8 @@ export default {
       
       const index = textLower.indexOf(queryLower);
       if (index !== -1) {
-        const start = Math.max(0, index - 50);
-        const end = Math.min(text.length, index + query.length + 50);
+        const start = Math.max(0, index - 80); // Увеличиваем контекст
+        const end = Math.min(text.length, index + query.length + 80);
         let fragment = text.substring(start, end);
         
         // Убираем обрезанные слова в начале и конце
@@ -301,7 +393,7 @@ export default {
         }
         
         if (fragment.length > maxLength) {
-          fragment = fragment.substring(0, maxLength - 3) + '...';
+          return this.smartTruncate(fragment, maxLength);
         }
         
         return fragment;
