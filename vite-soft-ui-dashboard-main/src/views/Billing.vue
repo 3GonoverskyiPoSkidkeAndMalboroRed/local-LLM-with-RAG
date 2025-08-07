@@ -39,7 +39,7 @@
                     <div v-html="formatMessage(message.content)"></div>
                     
                     <!-- Отображение источников для ответов ассистента в режиме RAG -->
-                    <div v-if="message.role === 'assistant' && message.sources && message.sources.length > 0 && chatMode === 'rag'" class="mt-3">
+                    <div v-if="message.role === 'assistant' && message.sources && message.sources.length > 0 && chatMode === 'rag' && !message.no_sources_found && !isNoSourcesResponse(message.content)" class="mt-3">
                       <SourceDisplay 
                         :sources="message.sources"
                         @show-notification="showNotification"
@@ -122,6 +122,21 @@ export default {
       if (!text) return '';
       // Заменяем \n на <br> для сохранения переносов строк
       return text.replace(/\n/g, '<br>');
+    },
+    
+    isNoSourcesResponse(content) {
+      // Проверяем, является ли ответ сообщением о том, что источники не найдены
+      const noSourcesKeywords = [
+        'не найдено релевантной информации',
+        'не найдено информации',
+        'информация не найдена',
+        'источники не найдены',
+        'документы не найдены'
+      ];
+      
+      return noSourcesKeywords.some(keyword => 
+        content.toLowerCase().includes(keyword.toLowerCase())
+      );
     },
     
     showNotification(notification) {
@@ -296,7 +311,8 @@ export default {
           this.chatMessages.push({
             role: 'assistant',
             content: response.data.answer || 'Ответ получен, но содержимое пустое.',
-            sources: response.data.sources || []
+            sources: response.data.sources || [],
+            no_sources_found: response.data.no_sources_found || false
           });
           
         } else {

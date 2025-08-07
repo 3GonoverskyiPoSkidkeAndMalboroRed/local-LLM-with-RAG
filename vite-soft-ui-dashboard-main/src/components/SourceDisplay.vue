@@ -5,17 +5,20 @@
         <h6 class="mb-0">
           <i class="fas fa-book-open me-2"></i>
           Источники информации
+          <span v-if="uniqueSources.length > 0" class="badge bg-primary ms-2">
+            {{ uniqueSources.length }}
+          </span>
         </h6>
       </div>
       <div class="card-body">
-        <div v-if="sources.length === 0" class="text-muted">
+        <div v-if="uniqueSources.length === 0" class="text-muted">
           <i class="fas fa-info-circle me-2"></i>
-          Источники не найдены
+          Источники не найдены или не найдено релевантной информации
         </div>
         
         <div v-else class="sources-list">
           <div 
-            v-for="(source, index) in sources" 
+            v-for="(source, index) in uniqueSources" 
             :key="source.chunk_id"
             class="source-item mb-3 p-3 border rounded"
             :class="{ 'border-primary': selectedSource === source.chunk_id }"
@@ -96,6 +99,18 @@ export default {
   data() {
     return {
       selectedSource: null
+    }
+  },
+  computed: {
+    uniqueSources() {
+      // Фильтруем уникальные источники по chunk_id
+      const uniqueMap = new Map();
+      this.sources.forEach(source => {
+        if (source.chunk_id && !uniqueMap.has(source.chunk_id)) {
+          uniqueMap.set(source.chunk_id, source);
+        }
+      });
+      return Array.from(uniqueMap.values());
     }
   },
   methods: {
