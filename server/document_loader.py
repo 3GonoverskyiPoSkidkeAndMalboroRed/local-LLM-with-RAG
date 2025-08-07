@@ -77,6 +77,7 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
             
             all_results = []
             seen_content = set()
+            seen_metadata = set()  # Для отслеживания дубликатов по метаданным
             
             for i, q in enumerate(query_variants):
                 print(f"Поиск по варианту {i+1}: {q[:30]}...")
@@ -89,11 +90,29 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
                     search_result = db.similarity_search_by_vector(query_emb, k=n_top_cos)
                     for doc in search_result:
                         content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
-                        # Избегаем дубликатов по содержимому
-                        content_hash = hash(content[:100])  # Используем первые 100 символов для хеша
-                        if content_hash not in seen_content:
-                            seen_content.add(content_hash)
+                        
+                        # Создаем уникальный ключ на основе содержимого и метаданных
+                        content_preview = content[:100].lower().strip()
+                        metadata_key = ""
+                        
+                        if hasattr(doc, 'metadata') and doc.metadata:
+                            # Создаем ключ из метаданных
+                            source = doc.metadata.get('source', '')
+                            file_path = doc.metadata.get('file', '')
+                            chunk_id = doc.metadata.get('chunk_id', '')
+                            metadata_key = f"{source}_{file_path}_{chunk_id}"
+                        
+                        # Проверяем уникальность по содержимому и метаданным
+                        content_hash = hash(content_preview)
+                        metadata_hash = hash(metadata_key)
+                        combined_key = f"{content_hash}_{metadata_hash}"
+                        
+                        if combined_key not in seen_content:
+                            seen_content.add(combined_key)
                             all_results.append(doc)
+                        else:
+                            print(f"Пропущен дубликат: {content_preview[:50]}...")
+                            
                 except Exception as method_error:
                     print(f"Ошибка в поиске: {method_error}")
                     continue
@@ -118,7 +137,7 @@ def vec_search(embedding_model, query, db, n_top_cos: int = 10, timeout: int = 2
                 if hasattr(x, 'page_content') and x.page_content.strip():
                     chunk_content = x.page_content
                     top_chunks.append(chunk_content)
-                elif hasattr(x, 'metadata') and 'chunk' in x.metadata:
+                elif hasattr(x, 'metadata') and x.metadata:
                     chunk_content = x.metadata.get('chunk')
                     if chunk_content and chunk_content.strip():
                         top_chunks.append(chunk_content)
