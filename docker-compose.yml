@@ -83,48 +83,13 @@ services:
     networks:
       - app-network
 
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   ports:
-  #     - "11434:11434"
-  #   environment:
-  #     # КОНСЕРВАТИВНЫЕ настройки для стабильности
-  #     - OLLAMA_NUM_PARALLEL=1  # Только 1 параллельный запрос
-  #     - OLLAMA_MAX_LOADED_MODELS=1  # Только 1 модель в памяти
-  #     - OLLAMA_FLASH_ATTENTION=false  # Отключаем для стабильности
-  #     - OLLAMA_KV_CACHE_TYPE=q4_0  # Экономия VRAM
-  #     - OLLAMA_MAX_QUEUE=5  # Уменьшаем очередь
-  #     - CUDA_VISIBLE_DEVICES=0
-  #     - OLLAMA_SCHEDULE_TIMEOUT=120s  # Увеличиваем таймаут
-  #     - OLLAMA_KEEP_ALIVE=5m  # Держим модель в памяти 5 минут
-  #     - OLLAMA_GPU_LAYERS=35  # Ограничиваем GPU слои
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 8G  # Ограничиваем память
-  #       reservations:
-  #         memory: 4G
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1  # Только 1 GPU
-  #             capabilities: [gpu]
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   networks:
-  #     - app-network
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+
 
 
 
 volumes:
   db_data:
   files_storage:
-  # ollama_data:
 
 networks:
   app-network:

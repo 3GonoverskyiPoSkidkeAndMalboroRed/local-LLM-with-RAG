@@ -65,11 +65,7 @@ jsonpointer
 jsonschema
 jsonschema-specifications
 kubernetes
-langchain
-langchain-community
-langchain-core
-langchain-ollama
-langchain-text-splitters
+
 langdetect
 langsmith
 lxml
@@ -92,7 +88,7 @@ nltk
 numpy
 oauthlib
 olefile
-ollama
+
 onnxruntime
 openpyxl
 opentelemetry-api
