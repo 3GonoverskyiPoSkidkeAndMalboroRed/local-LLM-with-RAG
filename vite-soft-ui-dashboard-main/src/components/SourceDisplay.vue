@@ -8,6 +8,9 @@
           <span v-if="uniqueSources.length > 0" class="badge bg-primary ms-2">
             {{ uniqueSources.length }}
           </span>
+          <small class="text-muted ms-2">
+            <i class="fas fa-star text-success"></i> Первый источник — основной
+          </small>
         </h6>
       </div>
       <div class="card-body">
@@ -28,6 +31,9 @@
                 <div class="d-flex align-items-center mb-2">
                   <i class="fas fa-file-alt me-2 text-primary"></i>
                   <strong class="text-primary">{{ source.file_name }}</strong>
+                  <span v-if="index === 0" class="badge bg-success ms-2" title="Основной источник информации">
+                    <i class="fas fa-star"></i> Основной
+                  </span>
                   <span v-if="source.page_number" class="badge bg-secondary ms-2">
                     Страница {{ source.page_number }}
                   </span>
@@ -51,7 +57,7 @@
                     </button>
                     <button 
                       class="btn btn-sm btn-outline-info"
-                      @click="openSourceModal(source)"
+                      @click="openSourceModal(source, index === 0)"
                       title="Открыть в модальном окне"
                     >
                       <i class="fas fa-external-link-alt"></i>
@@ -351,8 +357,8 @@ export default {
       }
     },
     
-    openSourceModal(source) {
-      this.$emit('open-source-modal', source);
+    openSourceModal(source, isMainSource) {
+      this.$emit('open-source-modal', source, isMainSource);
     }
   }
 }
@@ -376,6 +382,17 @@ export default {
 
 .source-item.border-primary {
   background-color: #e3f2fd;
+}
+
+.source-item:first-child {
+  border-left: 4px solid #28a745 !important;
+  background-color: #f8fff9;
+}
+
+.source-item:first-child:hover {
+  background-color: #e8f5e8;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(40, 167, 69, 0.2);
 }
 
 .source-preview p {

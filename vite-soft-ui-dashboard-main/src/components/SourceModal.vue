@@ -29,14 +29,20 @@
                   </div>
                 </div>
                 
-                <div class="row mb-3" v-if="source.page_number || source.similarity_score">
-                  <div class="col-md-6" v-if="source.page_number">
+                <div class="row mb-3" v-if="source.page_number || source.similarity_score || isMainSource">
+                  <div class="col-md-4" v-if="source.page_number">
                     <strong>Номер страницы:</strong>
                     <span class="badge bg-secondary ms-2">{{ source.page_number }}</span>
                   </div>
-                  <div class="col-md-6" v-if="source.similarity_score">
+                  <div class="col-md-4" v-if="source.similarity_score">
                     <strong>Релевантность:</strong>
                     <span class="badge bg-info ms-2">{{ (source.similarity_score * 100).toFixed(1) }}%</span>
+                  </div>
+                  <div class="col-md-4" v-if="isMainSource">
+                    <strong>Статус:</strong>
+                    <span class="badge bg-success ms-2">
+                      <i class="fas fa-star"></i> Основной источник
+                    </span>
                   </div>
                 </div>
               </div>
@@ -88,6 +94,10 @@ export default {
     source: {
       type: Object,
       default: null
+    },
+    isMainSource: {
+      type: Boolean,
+      default: false
     }
   },
   methods: {

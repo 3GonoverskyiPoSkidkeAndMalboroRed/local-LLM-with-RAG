@@ -90,6 +90,7 @@
     <!-- Модальное окно для детальной информации об источнике -->
     <SourceModal 
       :source="selectedSourceForModal"
+      :isMainSource="selectedSourceIsMain"
       @show-notification="showNotification"
     />
   </div>
@@ -115,7 +116,8 @@ export default {
       requestInProgress: false, // Флаг для отслеживания текущего запроса
       requestTimeout: null, // Таймер для отмены запроса
       lastRequestTime: 0, // Время последнего запроса
-      selectedSourceForModal: null // Выбранный источник для модального окна
+      selectedSourceForModal: null, // Выбранный источник для модального окна
+      selectedSourceIsMain: false // Флаг, указывающий, является ли выбранный источник основным
     };
   },
   methods: {
@@ -173,8 +175,9 @@ export default {
       }
     },
     
-    openSourceModal(source) {
+    openSourceModal(source, isMainSource = false) {
       this.selectedSourceForModal = source;
+      this.selectedSourceIsMain = isMainSource;
       
       // Проверяем, что Bootstrap доступен
       if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {

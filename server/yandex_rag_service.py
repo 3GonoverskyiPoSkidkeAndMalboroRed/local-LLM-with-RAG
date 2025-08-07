@@ -303,6 +303,7 @@ class YandexRAGService:
 8. При цитировании указывай источник документа
 9. НЕ ПЕРЕАДРЕСОВЫВАЙ на поиск - отвечай сам
 10. НЕ СКРЫВАЙ информацию из документов
+11. В КОНЦЕ ответа обязательно укажи номер основного источника (1, 2, 3, 4, 5) в формате: [ОСНОВНОЙ_ИСТОЧНИК: X]
 
 ### Контекст из документов:
 {context}
@@ -316,14 +317,24 @@ class YandexRAGService:
             # Получаем ответ от Yandex AI
             answer = await self.yandex_ai.generate_response(prompt)
             
+            # Очищаем ответ от маркера источника (если есть)
+            clean_answer = self._clean_answer_from_source_marker(answer)
+            
             # Проверяем на цензурные ответы и заменяем их
-            answer = self._fix_censored_response(answer, context, question)
+            clean_answer = self._fix_censored_response(clean_answer, context, question)
+            
+            # Анализируем ответ ИИ для определения основного источника
+            main_source_number = self._analyze_answer_for_main_source(clean_answer, sources)
+            
+            # Пересортировываем источники: основной источник первым, остальные по релевантности
+            reordered_sources = self._reorder_sources_by_main_source(sources, main_source_number)
             
             return {
-                "answer": answer,
-                "sources": sources,
+                "answer": clean_answer,
+                "sources": reordered_sources,
                 "context_used": len(context_parts),
-                "sources_count": len(sources)
+                "sources_count": len(reordered_sources),
+                "main_source_number": main_source_number
             }
             
         except Exception as e:
@@ -574,6 +585,179 @@ class YandexRAGService:
                 return new_answer
         
         return answer
+
+    def _extract_main_source_number(self, answer: str) -> int:
+        """Извлекает номер основного источника из ответа ИИ"""
+        try:
+            # Ищем паттерн [ОСНОВНОЙ_ИСТОЧНИК: X] в конце ответа
+            import re
+            pattern = r'\[ОСНОВНОЙ_ИСТОЧНИК:\s*(\d+)\]'
+            match = re.search(pattern, answer, re.IGNORECASE)
+            
+            if match:
+                source_number = int(match.group(1))
+                # Проверяем, что номер в допустимом диапазоне (1-5)
+                if 1 <= source_number <= 5:
+                    return source_number
+            
+            # Если не нашли маркер, возвращаем 1 (первый источник)
+            return 1
+        except Exception as e:
+            print(f"Ошибка при извлечении номера основного источника: {e}")
+            return 1
+    
+    def _clean_answer_from_source_marker(self, answer: str) -> str:
+        """Удаляет маркер основного источника из ответа"""
+        try:
+            import re
+            # Удаляем паттерн [ОСНОВНОЙ_ИСТОЧНИК: X] из ответа
+            pattern = r'\s*\[ОСНОВНОЙ_ИСТОЧНИК:\s*\d+\]\s*$'
+            cleaned_answer = re.sub(pattern, '', answer, flags=re.IGNORECASE)
+            return cleaned_answer.strip()
+        except Exception as e:
+            print(f"Ошибка при очистке ответа от маркера источника: {e}")
+            return answer
+
+    def _reorder_sources_by_main_source(self, sources: List[Dict[str, Any]], main_source_number: int) -> List[Dict[str, Any]]:
+        """Пересортировывает источники, помещая основной источник на первое место."""
+        if not sources:
+            return []
+        
+        # Создаем копию списка источников
+        reordered_sources = sources.copy()
+        
+        # Проверяем, что номер основного источника в допустимом диапазоне
+        if main_source_number < 1 or main_source_number > len(reordered_sources):
+            print(f"Номер основного источника {main_source_number} вне диапазона, используем первый источник")
+            return reordered_sources
+        
+        # Находим индекс основного источника (main_source_number - 1, так как индексы начинаются с 0)
+        main_source_index = main_source_number - 1
+        
+        if main_source_index < len(reordered_sources):
+            # Перемещаем основной источник на первое место
+            main_source = reordered_sources.pop(main_source_index)
+            reordered_sources.insert(0, main_source)
+            
+            print(f"Основной источник {main_source_number} перемещен на первое место: {main_source.get('file_name', 'unknown')}")
+        
+        return reordered_sources
+
+    def _analyze_answer_for_main_source(self, answer: str, sources: List[Dict[str, Any]]) -> int:
+        """Анализирует ответ ИИ и определяет основной источник на основе содержимого"""
+        if not answer or not sources:
+            return 1
+        
+        # Приводим ответ к нижнему регистру для анализа
+        answer_lower = answer.lower()
+        
+        # Ищем точные совпадения фраз из источников в ответе
+        best_match_index = 0
+        best_match_score = 0
+        
+        for i, source in enumerate(sources):
+            source_content = source.get('chunk_content', '').lower()
+            if not source_content:
+                continue
+            
+            score = 0
+            
+            # Проверяем точные совпадения определений
+            if '—' in source_content and '—' in answer_lower:
+                # Ищем определение в формате "ТМЦ — товарно-материальные ценности"
+                definition_pattern = r'([а-яё]+)\s*—\s*([^;]+)'
+                import re
+                source_definitions = re.findall(definition_pattern, source_content)
+                answer_definitions = re.findall(definition_pattern, answer_lower)
+                
+                for source_def in source_definitions:
+                    for answer_def in answer_definitions:
+                        if source_def[0] == answer_def[0]:  # Термин совпадает
+                            score += 200  # Высокий бонус за точное совпадение определения
+            
+            # Проверяем совпадения ключевых фраз
+            source_words = source_content.split()
+            answer_words = answer_lower.split()
+            
+            # Считаем общие слова
+            common_words = set(source_words) & set(answer_words)
+            score += len(common_words) * 5
+            
+            # Бонус за длинные совпадающие фразы
+            for j in range(len(source_words) - 2):
+                for k in range(len(answer_words) - 2):
+                    source_phrase = ' '.join(source_words[j:j+3])
+                    answer_phrase = ' '.join(answer_words[k:k+3])
+                    if source_phrase == answer_phrase and len(source_phrase) > 10:
+                        score += 50
+            
+            # Дополнительный бонус за определения в ответе
+            if any(word in answer_lower for word in ['—', 'означает', 'это', 'определение']):
+                if any(word in source_content for word in ['—', 'означает', 'определение', 'термины']):
+                    score += 100
+            
+            # Бонус за термины и сокращения
+            if 'термины и сокращения' in source_content.lower():
+                score += 80
+            
+            if score > best_match_score:
+                best_match_score = score
+                best_match_index = i
+        
+        print(f"RAG: Анализ ответа - выбран источник {best_match_index + 1} с баллом {best_match_score}")
+        
+        return best_match_index + 1  # +1 потому что индексы начинаются с 1
+
+    def _presort_sources_by_semantic_importance(self, sources: List[Dict[str, Any]], question: str) -> List[Dict[str, Any]]:
+        """Предварительно сортирует источники по семантической важности для вопроса"""
+        if not sources or not question:
+            return sources
+        
+        question_lower = question.lower()
+        
+        # Определяем тип вопроса
+        is_definition_question = any(word in question_lower for word in ['что такое', 'что означает', 'определение', 'означает'])
+        is_procedure_question = any(word in question_lower for word in ['как', 'процедура', 'процесс', 'шаги', 'этапы'])
+        is_requirement_question = any(word in question_lower for word in ['требования', 'правила', 'условия', 'необходимо'])
+        
+        def calculate_semantic_score(source):
+            content = source.get('chunk_content', '').lower()
+            score = 0
+            
+            # Бонус за определения
+            if is_definition_question:
+                if any(word in content for word in ['—', 'означает', 'определение', 'это']):
+                    score += 100
+                if 'термины и сокращения' in content:
+                    score += 50
+            
+            # Бонус за процедуры
+            if is_procedure_question:
+                if any(word in content for word in ['шаг', 'этап', 'сначала', 'затем', 'после']):
+                    score += 80
+                if any(word in content for word in ['процедура', 'процесс', 'алгоритм']):
+                    score += 60
+            
+            # Бонус за требования
+            if is_requirement_question:
+                if any(word in content for word in ['требуется', 'необходимо', 'обязательно', 'должен']):
+                    score += 70
+                if any(word in content for word in ['правила', 'условия', 'критерии']):
+                    score += 50
+            
+            # Базовый бонус за релевантность
+            score += source.get('similarity_score', 0) * 10
+            
+            return score
+        
+        # Сортируем источники по семантической важности
+        sorted_sources = sorted(sources, key=calculate_semantic_score, reverse=True)
+        
+        print(f"RAG: Источники пересортированы по семантической важности для вопроса: '{question[:50]}...'")
+        for i, source in enumerate(sorted_sources):
+            print(f"  {i+1}. {source.get('file_name', 'unknown')} (релевантность: {source.get('similarity_score', 0):.3f})")
+        
+        return sorted_sources
 
 # Глобальный экземпляр сервиса
 yandex_rag_service = YandexRAGService()
