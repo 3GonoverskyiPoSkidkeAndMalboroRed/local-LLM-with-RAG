@@ -52,7 +52,7 @@
                   <button
                     v-if="isDocumentFormat(getFileExtension(content.file_path))"
                     @click="viewDocument(content)"
-                    class="btn btn-sm btn-outline-primary me-2"
+                    class="btn btn-sm btn-outline-secondary me-2"
                     title="Просмотреть документ"
                   >
                     <i class="fas fa-eye me-1"></i>Просмотр
