@@ -11,15 +11,15 @@ router = APIRouter(prefix="/api/yandex-ai", tags=["Yandex AI"])
 # Pydantic модели для запросов
 class GenerateTextRequest(BaseModel):
     prompt: str
-    model: str = "yandexgpt-lite"
-    max_tokens: int = 1000
+    model: str | None = None  # Используем лучшую модель по умолчанию
+    max_tokens: int = 4000    # Увеличиваем лимит токенов
     temperature: float = 0.6
 
 class GenerateWithContextRequest(BaseModel):
     context: str
     question: str
-    model: str = "yandexgpt-lite"
-    max_tokens: int = 1000
+    model: str | None = None  # Используем лучшую модель по умолчанию
+    max_tokens: int = 4000    # Увеличиваем лимит токенов
 
 class GenerateTextResponse(BaseModel):
     success: bool
@@ -36,7 +36,7 @@ async def generate_text(request: GenerateTextRequest):
     """
     Генерация текста с помощью Yandex GPT через Yandex Cloud ML SDK
     
-    Использует стандартный системный промпт для профессионального ассистента.
+    Использует лучшую доступную модель по умолчанию (yandexgpt).
     """
     try:
         # Стандартный системный промпт для профессионального ассистента
@@ -84,6 +84,8 @@ async def generate_text(request: GenerateTextRequest):
 async def generate_with_context(request: GenerateWithContextRequest):
     """
     Генерация ответа с контекстом (RAG) через Yandex Cloud ML SDK
+    
+    Использует лучшую доступную модель по умолчанию (yandexgpt).
     """
     try:
         result = await yandex_ai_service.generate_with_context(

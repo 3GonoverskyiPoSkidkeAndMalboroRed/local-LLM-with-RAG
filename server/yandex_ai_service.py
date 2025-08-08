@@ -13,6 +13,11 @@ class YandexAIService:
         self.ml_client = None
         self._initialized = False
         
+        # Настройки моделей по умолчанию (лучшие доступные)
+        self.default_text_model = os.getenv('YANDEX_DEFAULT_MODEL', 'yandexgpt')
+        self.default_embeddings_model = os.getenv('YANDEX_EMBEDDINGS_MODEL', 'text-search-doc')
+        self.default_max_tokens = int(os.getenv('YANDEX_MAX_TOKENS', '4000'))
+        
         # Загружаем переменные окружения
         self._load_environment_vars()
         
@@ -56,15 +61,15 @@ class YandexAIService:
     
     async def generate_text(self, 
                            prompt: str, 
-                           model: str = "yandexgpt-lite",
-                           max_tokens: int = 1000,
+                           model: str = None,
+                           max_tokens: int = None,
                            temperature: float = 0.6) -> Optional[Dict[str, Any]]:
         """
         Генерация текста с помощью Yandex GPT через Yandex Cloud ML SDK
         
         Args:
             prompt: Текст запроса
-            model: Модель для генерации (yandexgpt-lite, yandexgpt, yandexgpt-instruct)
+            model: Модель для генерации (yandexgpt, yandexgpt-lite, yandexgpt-instruct)
             max_tokens: Максимальное количество токенов
             temperature: Температура генерации (0.0 - 1.0)
             
@@ -78,10 +83,14 @@ class YandexAIService:
             if not self.ml_client:
                 raise ValueError("Yandex Cloud ML SDK не инициализирован")
             
+            # Используем значения по умолчанию, если не переданы
+            use_model = model or self.default_text_model
+            use_max_tokens = max_tokens or self.default_max_tokens
+            
             # Получаем модель и настраиваем её
-            model_instance = self.ml_client.models.completions(model)
+            model_instance = self.ml_client.models.completions(use_model)
             model_instance = model_instance.configure(
-                max_tokens=max_tokens,
+                max_tokens=use_max_tokens,
                 temperature=temperature
             )
             
@@ -90,7 +99,7 @@ class YandexAIService:
                 messages=[{"role": "user", "text": prompt}]
             )
             
-            logger.info(f"Успешная генерация текста с моделью {model}")
+            logger.info(f"Успешная генерация текста с моделью {use_model}")
             
             # Извлекаем текст из ответа
             text_content = ""
@@ -118,7 +127,7 @@ class YandexAIService:
             return {
                 "success": True,
                 "text": text_content,
-                "model": model,
+                "model": use_model,
                 "usage": usage_dict,
                 "finish_reason": response.finish_reason if hasattr(response, 'finish_reason') else "",
                 "sdk_used": True,
@@ -137,8 +146,8 @@ class YandexAIService:
     async def generate_with_context(self, 
                                    context: str,
                                    question: str,
-                                   model: str = "yandexgpt-lite",
-                                   max_tokens: int = 1000) -> Optional[Dict[str, Any]]:
+                                   model: str = None,
+                                   max_tokens: int = None) -> Optional[Dict[str, Any]]:
         """
         Генерация ответа с контекстом (RAG) через Yandex Cloud ML SDK
         
@@ -176,7 +185,7 @@ class YandexAIService:
 
         return await self.generate_text(prompt, model, max_tokens)
     
-    async def get_embedding(self, text: str, model: str = "text-search-doc") -> list:
+    async def get_embedding(self, text: str, model: str = None) -> list:
         """
         Получение эмбеддинга для текста через Yandex Cloud ML SDK
         
@@ -195,8 +204,11 @@ class YandexAIService:
                 logger.warning("Yandex Cloud ML SDK не инициализирован, возвращаем пустой эмбеддинг")
                 return [0.0] * 256
             
+            # Используем модель по умолчанию, если не передана
+            use_model = model or self.default_embeddings_model
+            
             # Получаем модель эмбеддингов
-            embedding_model = self.ml_client.models.text_embeddings(model)
+            embedding_model = self.ml_client.models.text_embeddings(use_model)
             
             # Создаем эмбеддинг
             response = await embedding_model.run(text=text)

@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 import secrets
 from passlib.context import CryptContext
-from fastapi.middleware.cors import CORSMiddleware
 import os
 
 from sqlalchemy.orm import Session
