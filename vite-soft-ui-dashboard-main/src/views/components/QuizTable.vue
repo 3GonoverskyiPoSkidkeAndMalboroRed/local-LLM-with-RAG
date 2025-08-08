@@ -64,10 +64,10 @@
                       <span class="text-secondary text-xs font-weight-bold">{{ formatDate(quiz.created_at) }}</span>
                     </td>
                     <td class="align-middle">
-                      <button class="btn btn-sm btn-primary me-2" @click="startQuiz(quiz)">
+                      <button class="btn btn-sm btn-outline-secondary me-2" @click="startQuiz(quiz)">
                         <i class="fas fa-play me-1"></i> Пройти
                       </button>
-                      <button v-if="quiz.is_test" class="btn btn-sm btn-primary" @click="viewResults(quiz)">
+                      <button v-if="quiz.is_test" class="btn btn-sm btn-outline-secondary" @click="viewResults(quiz)">
                         <i class="fas fa-chart-bar me-1"></i> Результаты
                       </button>
                     </td>
