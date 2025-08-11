@@ -10,11 +10,10 @@
             class="nav nav-footer justify-content-center justify-content-lg-end"
           >
             <li class="nav-item">
-              <a
-                href="/feedback"
+              <router-link
+                to="/feedback"
                 class="nav-link text-muted"
-                target="_blank"
-                >Обратная связь</a
+                >Обратная связь</router-link
               >
             </li>
             <!-- <li class="nav-item">
