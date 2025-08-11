@@ -195,8 +195,7 @@
                         </div>
                         <div class="col-md-4">
                           <label for="quiz-department" class="form-label">Отдел</label>
-                          <select class="form-select" id="quiz-department" v-model="quizForm.department_id">
-                            <option value="">Все отделы</option>
+                          <select class="form-select" id="quiz-department" v-model="quizForm.department_id" required>
                             <option v-for="department in departments" :key="department.id" :value="department.id">
                               {{ department.department_name }}
                             </option>
@@ -204,8 +203,7 @@
                         </div>
                         <div class="col-md-4">
                           <label for="quiz-access" class="form-label">Уровень доступа</label>
-                          <select class="form-select" id="quiz-access" v-model="quizForm.access_level">
-                            <option value="">Все уровни доступа</option>
+                          <select class="form-select" id="quiz-access" v-model="quizForm.access_level" required>
                             <option v-for="access in accessLevels" :key="access.id" :value="access.id">
                               {{ access.access_name }}
                             </option>
