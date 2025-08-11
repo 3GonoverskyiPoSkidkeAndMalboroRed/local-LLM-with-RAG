@@ -10,15 +10,19 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models_db import Access, Content, User, Department
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из .env, если запускается локально
+load_dotenv()
 
 router = APIRouter(prefix="/user", tags=["user"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Настройки JWT
-JWT_SECRET = os.getenv("JWT_SECRET", "CHANGE_ME_SECRET")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 
