@@ -4,12 +4,13 @@
       <div class="col-12">
         <div class="card mb-4">
           <div class="card-header pb-0 text-center">
-            <h6>НУЖНО ПРИДУМАТЬ НАПОЛНЕНИЕ!!!!</h6>
-            
+            <h1 class="display-6 fw-bold text-dark mb-2">
+              Корпоративная система управления знаниями НПО «СПЕКТРОН»
+            </h1>
           </div>
           <div class="card-body px-0 pt-0 pb-2">
             <div class="p-4 text-center">
-              <h1>НУЖНО ПРИУМАТЬ НАПОЛНЕНИЕ!!!!</h1>
+              <!-- Дополнительного текста не требуется -->
             </div>
           </div>
         </div>
@@ -56,6 +57,178 @@
           <i class="fas fa-clipboard-check me-2"></i>
           Перейти к тестам и анкетам
         </router-link>
+      </div>
+    </div>
+    
+    <!-- FAQ блок -->
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card mb-4 faq-card">
+          <div class="card-header pb-0 d-flex align-items-center">
+            <i class="fas fa-question-circle me-2 text-info"></i>
+            <h4 class="mb-0 fw-bold">Часто задаваемые вопросы</h4>
+          </div>
+          <div class="card-body">
+            <div class="accordion" id="faqAccordion">
+              <!-- Общие вопросы -->
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="faqHeadingOne">
+                  <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseOne" aria-expanded="true" aria-controls="faqCollapseOne">
+                    <i class="fas fa-search me-2"></i>
+                    Я не могу найти нужный документ. Что делать?
+                  </button>
+                </h2>
+                <div id="faqCollapseOne" class="accordion-collapse collapse show" aria-labelledby="faqHeadingOne" data-bs-parent="#faqAccordion">
+                  <div class="accordion-body">
+                    <p>Попробуйте:</p>
+                    <ul>
+                      <li>Использовать разные ключевые слова для поиска</li>
+                      <li>Обратиться к ИИ-ассистенту в режиме RAG</li>
+                      <li>Связаться с администратором для проверки прав доступа</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="faqHeadingTwo">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseTwo" aria-expanded="false" aria-controls="faqCollapseTwo">
+                    <i class="fas fa-robot me-2"></i>
+                    ИИ-ассистент не отвечает на мой вопрос. Почему?
+                  </button>
+                </h2>
+                <div id="faqCollapseTwo" class="accordion-collapse collapse" aria-labelledby="faqHeadingTwo" data-bs-parent="#faqAccordion">
+                  <div class="accordion-body">
+                    <p>Возможные причины:</p>
+                    <ul>
+                      <li>RAG система не инициализирована для вашего отдела</li>
+                      <li>В базе нет документов по вашему вопросу</li>
+                      <li>Вопрос сформулирован слишком общо</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="faqHeadingThree">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseThree" aria-expanded="false" aria-controls="faqCollapseThree">
+                    <i class="fas fa-folder-open me-2"></i>
+                    Как узнать, какие документы доступны моему отделу?
+                  </button>
+                </h2>
+                <div id="faqCollapseThree" class="accordion-collapse collapse" aria-labelledby="faqHeadingThree" data-bs-parent="#faqAccordion">
+                  <div class="accordion-body">
+                    <p>Перейдите в раздел "Документы" - там отображаются только доступные вам файлы согласно уровню доступа.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Технические проблемы -->
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="faqHeadingFour">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseFour" aria-expanded="false" aria-controls="faqCollapseFour">
+                    <i class="fas fa-tachometer-alt me-2"></i>
+                    Страница загружается медленно
+                  </button>
+                </h2>
+                <div id="faqCollapseFour" class="accordion-collapse collapse" aria-labelledby="faqHeadingFour" data-bs-parent="#faqAccordion">
+                  <div class="accordion-body">
+                    <ul>
+                      <li>Проверьте интернет-соединение</li>
+                      <li>Обновите страницу (F5)</li>
+                      <li>Очистите кэш браузера</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="faqHeadingFive">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseFive" aria-expanded="false" aria-controls="faqCollapseFive">
+                    <i class="fas fa-upload me-2"></i>
+                    Не могу загрузить файл
+                  </button>
+                </h2>
+                <div id="faqCollapseFive" class="accordion-collapse collapse" aria-labelledby="faqHeadingFive" data-bs-parent="#faqAccordion">
+                  <div class="accordion-body">
+                    <p>Убедитесь, что:</p>
+                    <ul>
+                      <li>Размер файла не превышает лимит</li>
+                      <li>Формат файла поддерживается (PDF, DOCX, TXT)</li>
+                      <li>У вас есть права администратора</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="faqHeadingSix">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseSix" aria-expanded="false" aria-controls="faqCollapseSix">
+                    <i class="fas fa-key me-2"></i>
+                    Забыл пароль
+                  </button>
+                </h2>
+                <div id="faqCollapseSix" class="accordion-collapse collapse" aria-labelledby="faqHeadingSix" data-bs-parent="#faqAccordion">
+                  <div class="accordion-body">
+                    <p>Обратитесь к системному администратору для восстановления доступа.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Работа с ИИ -->
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="faqHeadingSeven">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseSeven" aria-expanded="false" aria-controls="faqCollapseSeven">
+                    <i class="fas fa-brain me-2"></i>
+                    Как получить более точные ответы от ИИ?
+                  </button>
+                </h2>
+                <div id="faqCollapseSeven" class="accordion-collapse collapse" aria-labelledby="faqHeadingSeven" data-bs-parent="#faqAccordion">
+                  <div class="accordion-body">
+                    <ul>
+                      <li>Используйте режим "С базой знаний"</li>
+                      <li>Формулируйте вопросы конкретно</li>
+                      <li>Используйте терминологию из ваших документов</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="faqHeadingEight">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseEight" aria-expanded="false" aria-controls="faqCollapseEight">
+                    <i class="fas fa-history me-2"></i>
+                    Можно ли сохранить историю чата?
+                  </button>
+                </h2>
+                <div id="faqCollapseEight" class="accordion-collapse collapse" aria-labelledby="faqHeadingEight" data-bs-parent="#faqAccordion">
+                  <div class="accordion-body">
+                    <p>История чата сохраняется в рамках текущей сессии. Для долгосрочного хранения скопируйте важную информацию.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Контакты и поддержка -->
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="faqHeadingNine">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseNine" aria-expanded="false" aria-controls="faqCollapseNine">
+                    <i class="fas fa-headset me-2"></i>
+                    Контакты и поддержка
+                  </button>
+                </h2>
+                <div id="faqCollapseNine" class="accordion-collapse collapse" aria-labelledby="faqHeadingNine" data-bs-parent="#faqAccordion">
+                  <div class="accordion-body">
+                    <p>При возникновении проблем или вопросов обращайтесь:</p>
+                    <ul>
+                      <li><strong>Администратор системы:</strong> neverov.p@spectronxray.ru</li>
+                      <li><strong>Обратная связь:</strong> используйте встроенную форму в системе</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     
