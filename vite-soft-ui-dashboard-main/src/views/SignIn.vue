@@ -129,9 +129,17 @@ export default {
         // Сохраняем информацию о входе пользователя
         localStorage.setItem("isAuthenticated", "true");
         localStorage.setItem("userLogin", this.login);
-        localStorage.setItem("userId", response.data.id);
-        localStorage.setItem("departmentId", response.data.department_id);
-        localStorage.setItem("role_id", response.data.role_id);
+        // JWT токен для Authorization: Bearer
+        if (response.data && response.data.access_token) {
+          localStorage.setItem("token", response.data.access_token);
+        }
+        // Обратная совместимость и явное сохранение идентификаторов
+        const u = response.data.user || response.data;
+        if (u) {
+          if (u.id !== undefined) localStorage.setItem("userId", u.id);
+          if (u.department_id !== undefined) localStorage.setItem("departmentId", u.department_id);
+          if (u.role_id !== undefined) localStorage.setItem("role_id", u.role_id);
+        }
 
         // Перенаправляем на панель управления
         this.router.push("/dashboard");
