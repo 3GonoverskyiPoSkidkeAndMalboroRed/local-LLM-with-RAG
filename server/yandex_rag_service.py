@@ -17,8 +17,9 @@ from openpyxl import load_workbook
 class YandexRAGService:
     def __init__(self):
         self.yandex_ai = YandexAIService()
-        self.chunk_size = 1000  # Размер чанка в символах
-        self.chunk_overlap = 200  # Перекрытие между чанками
+        # Увеличиваем размер чанка для лучшего качества RAG
+        self.chunk_size = int(os.getenv('RAG_CHUNK_SIZE', '2000'))  # Размер чанка в символах
+        self.chunk_overlap = int(os.getenv('RAG_CHUNK_OVERLAP', '400'))  # Перекрытие между чанками
         
     async def initialize_rag(self, department_id: int, force_reload: bool = False) -> Dict[str, Any]:
         """Инициализация RAG системы для отдела"""
@@ -120,7 +121,7 @@ class YandexRAGService:
             }
         finally:
             db.close()  
-  
+ 
     async def get_rag_status(self, department_id: int) -> Dict[str, Any]:
         """Получение статуса RAG системы для отдела"""
         db = SessionLocal()
@@ -206,7 +207,7 @@ class YandexRAGService:
             }
         finally:
             db.close()  
-  
+
     async def query_rag(self, department_id: int, question: str) -> Dict[str, Any]:
         """Выполнение RAG запроса"""
         db = SessionLocal()
@@ -321,11 +322,15 @@ class YandexRAGService:
 ### Ответ:
 Проанализировав предоставленные документы:"""
             
-            # Получаем ответ от Yandex AI
-            answer = await self.yandex_ai.generate_response(prompt)
+            # Получаем ответ от Yandex AI с увеличенным лимитом токенов
+            answer = await self.yandex_ai.generate_text(prompt, max_tokens=4000)
+            if isinstance(answer, dict) and answer.get("success"):
+                answer_text = answer.get("text", "")
+            else:
+                answer_text = "Извините, произошла ошибка при генерации ответа."
             
             # Очищаем ответ от маркера источника (если есть)
-            clean_answer = self._clean_answer_from_source_marker(answer)
+            clean_answer = self._clean_answer_from_source_marker(answer_text)
             
             # Проверяем на цензурные ответы и заменяем их
             clean_answer = self._fix_censored_response(clean_answer, context, question)
