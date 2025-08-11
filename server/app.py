@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, APIRouter
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, APIRouter, status
 from pydantic import BaseModel
 import uvicorn
 import os
@@ -169,7 +169,7 @@ async def get_access_levels_list(db: Session = Depends(get_db)):
     return [{"id": access.id, "access_name": access.access_name} for access in access_levels]
 
 @app.get("/tables")
-async def get_tables(db: Session = Depends(get_db)):
+async def get_tables(db: Session = Depends(get_db), current_user: User = Depends(__import__('routes.user_routes', fromlist=['require_admin']).require_admin)):
     try:
         inspector = inspect(db.bind)
         tables = inspector.get_table_names()
@@ -178,7 +178,7 @@ async def get_tables(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении таблиц: {str(e)}")
 
 @app.get("/tables/{table_name}")
-async def get_table_info(table_name: str, db: Session = Depends(get_db)):
+async def get_table_info(table_name: str, db: Session = Depends(get_db), current_user: User = Depends(__import__('routes.user_routes', fromlist=['require_admin']).require_admin)):
     try:
         inspector = inspect(db.bind)
         columns = inspector.get_columns(table_name)

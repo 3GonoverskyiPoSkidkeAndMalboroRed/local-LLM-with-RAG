@@ -13,10 +13,22 @@ class YandexAIService:
         self.ml_client = None
         self._initialized = False
         
-        # Настройки моделей по умолчанию (лучшие доступные)
-        self.default_text_model = os.getenv('YANDEX_DEFAULT_MODEL', 'yandexgpt')
-        self.default_embeddings_model = os.getenv('YANDEX_EMBEDDINGS_MODEL', 'text-search-doc')
+        # Настройки моделей по умолчанию (поддержка разных названий переменных)
+        self.default_text_model = (
+            os.getenv('YANDEX_LLM_MODEL')
+            or os.getenv('YANDEX_DEFAULT_MODEL')
+            or 'yandexgpt'
+        )
+        self.default_embeddings_model = (
+            os.getenv('YANDEX_EMBEDDING_MODEL')
+            or os.getenv('YANDEX_EMBEDDINGS_MODEL')
+            or 'text-search-doc'
+        )
         self.default_max_tokens = int(os.getenv('YANDEX_MAX_TOKENS', '4000'))
+        self.default_temperature = float(os.getenv('YANDEX_TEMPERATURE', '0.6'))
+
+        # Флаги и базовые параметры
+        self.use_yandex_cloud = os.getenv('USE_YANDEX_CLOUD', 'true').lower() == 'true'
         
         # Загружаем переменные окружения
         self._load_environment_vars()
@@ -37,6 +49,12 @@ class YandexAIService:
     
     def _initialize_sdk(self):
         """Инициализирует Yandex Cloud ML SDK"""
+        if not self.use_yandex_cloud:
+            logger.info("USE_YANDEX_CLOUD=false — Yandex Cloud ML SDK не используется")
+            self.ml_client = None
+            self._initialized = False
+            return
+
         if self.api_key and self.folder_id:
             try:
                 self.ml_client = AsyncYCloudML(
@@ -63,7 +81,7 @@ class YandexAIService:
                            prompt: str, 
                            model: str = None,
                            max_tokens: int = None,
-                           temperature: float = 0.6) -> Optional[Dict[str, Any]]:
+                           temperature: float = None) -> Optional[Dict[str, Any]]:
         """
         Генерация текста с помощью Yandex GPT через Yandex Cloud ML SDK
         
@@ -86,12 +104,13 @@ class YandexAIService:
             # Используем значения по умолчанию, если не переданы
             use_model = model or self.default_text_model
             use_max_tokens = max_tokens or self.default_max_tokens
+            use_temperature = self.default_temperature if temperature is None else temperature
             
             # Получаем модель и настраиваем её
             model_instance = self.ml_client.models.completions(use_model)
             model_instance = model_instance.configure(
                 max_tokens=use_max_tokens,
-                temperature=temperature
+                temperature=use_temperature
             )
             
             # Используем новый SDK для генерации
