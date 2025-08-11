@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request, status
 import os
 from sqlalchemy.orm import Session
 from database import get_db
 from models_db import Access, Content, User, Tag
+from routes.user_routes import get_current_user, require_admin, is_admin
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from typing import List
@@ -13,7 +14,11 @@ import shutil
 router = APIRouter(prefix="/content", tags=["content"])
 
 @router.get("/document-viewer/{content_id}")
-async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db)):
+async def get_document_viewer_page(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Возвращает HTML страницу для просмотра документа через Google Docs Viewer
     """
@@ -23,6 +28,12 @@ async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db
         if not content:
             raise HTTPException(status_code=404, detail="Документ не найден")
         
+        # Проверяем доступ пользователя к документу
+        if not (is_admin(current_user) or (
+            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра документа")
+
         # Получаем расширение файла
         file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
         
@@ -188,8 +199,17 @@ async def upload_content(
     file: UploadFile = File(...),
     tag_id: int = None,
     user_id: int = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Проверки прав: user_id (если передан) должен совпадать с текущим пользователем, иначе только админ
+    if user_id is not None and user_id != current_user.id and not is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки от имени другого пользователя")
+
+    # Админ может грузить в любой отдел; не-админ только в свой отдел
+    if not is_admin(current_user) and department_id != current_user.department_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки в другой отдел")
+
     # Создаем базовую директорию /app/files/, если она не существует
     os.makedirs("/app/files/", exist_ok=True)
     
@@ -234,8 +254,12 @@ async def upload_files(
     files: List[UploadFile] = File(...),
     access_level: int = 1,
     department_id: int = 1,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Проверки прав на массовую загрузку
+    if not is_admin(current_user) and department_id != current_user.department_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки в другой отдел")
     # Базовая директория для всех файлов
     base_dir = "/app/files"
     print(f"DEBUG: Создаем базовую директорию: {base_dir}")
@@ -396,13 +420,23 @@ async def get_content_by_id(content_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении контента: {str(e)}")
 
 @router.delete("/content/{content_id}")
-async def delete_content(content_id: int, db: Session = Depends(get_db)):
+async def delete_content(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         # Получаем контент по ID
         content = db.query(Content).filter(Content.id == content_id).first()
         if not content:
             raise HTTPException(status_code=404, detail="Контент не найден")
         
+        # Проверяем права: админ или владеет по департаменту/уровню
+        if not (is_admin(current_user) or (
+            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для удаления контента")
+
         # Сохраняем путь к файлу
         file_path = content.file_path
         
@@ -443,11 +477,21 @@ async def get_all_content(db: Session = Depends(get_db)):
     
     
 @router.get("/download-file/{content_id}")
-async def download_file(content_id: int, db: Session = Depends(get_db)):
+async def download_file(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     # Получаем контент из базы данных по ID
     content = db.query(Content).filter(Content.id == content_id).first()
     if content is None:
         raise HTTPException(status_code=404, detail="Контент не найден")
+
+    # Проверяем права доступа текущего пользователя
+    if not (is_admin(current_user) or (
+        current_user.access_id == content.access_level and current_user.department_id == content.department_id
+    )):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для скачивания файла")
 
     # Проверяем, существует ли файл
     file_path = content.file_path
@@ -548,7 +592,11 @@ async def search_documents(
         raise HTTPException(status_code=500, detail=f"Ошибка при поиске документов: {str(e)}")
 
 @router.post("/create-tag")
-async def create_tag(tag_name: str, db: Session = Depends(get_db)):
+async def create_tag(
+    tag_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         new_tag = Tag(tag_name=tag_name)
         db.add(new_tag)
@@ -559,7 +607,12 @@ async def create_tag(tag_name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при создании тега: {str(e)}")
 
 @router.put("/update-tag/{tag_id}")
-async def update_tag(tag_id: int, tag_name: str, db: Session = Depends(get_db)):
+async def update_tag(
+    tag_id: int,
+    tag_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         tag = db.query(Tag).filter(Tag.id == tag_id).first()
         if tag is None:
@@ -572,7 +625,11 @@ async def update_tag(tag_id: int, tag_name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при обновлении тега: {str(e)}")
 
 @router.delete("/delete-tag/{tag_id}")
-async def delete_tag(tag_id: int, db: Session = Depends(get_db)):
+async def delete_tag(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     """
     Удаляет тег по ID.
     """

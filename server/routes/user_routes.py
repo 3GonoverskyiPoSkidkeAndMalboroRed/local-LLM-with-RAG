@@ -19,10 +19,20 @@ router = APIRouter(prefix="/user", tags=["user"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Настройки JWT
+# Настройки JWT (жёсткая проверка наличия переменных окружения)
 JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES"))
+_JWT_EXPIRE_MINUTES_RAW = os.getenv("JWT_EXPIRE_MINUTES")
+
+if not JWT_SECRET or not JWT_ALGORITHM or _JWT_EXPIRE_MINUTES_RAW is None:
+    raise RuntimeError(
+        "Отсутствуют обязательные переменные окружения JWT: требуется JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES"
+    )
+
+try:
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(_JWT_EXPIRE_MINUTES_RAW)
+except ValueError as e:
+    raise RuntimeError("JWT_EXPIRE_MINUTES должен быть целым числом") from e
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
 
@@ -62,6 +72,18 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+
+# Админ-помощники
+def is_admin(user: User) -> bool:
+    # Принято считать роль администратора role_id = 1
+    return int(user.role_id or 0) == 1
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if not is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ только для администраторов")
+    return current_user
 
 class UserCreate(BaseModel):
     login: str

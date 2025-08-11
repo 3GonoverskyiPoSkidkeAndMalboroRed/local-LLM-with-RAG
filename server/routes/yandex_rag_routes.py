@@ -2,7 +2,7 @@
 Роуты для Yandex RAG системы
 """
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
@@ -11,6 +11,7 @@ import logging
 from database import get_db
 from models_db import Department, Content
 from yandex_rag_service import yandex_rag_service
+from routes.user_routes import require_admin
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,8 @@ class InitializeResponse(BaseModel):
 async def initialize_rag_for_department(
     request: InitializeRAGRequest, 
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(require_admin),
 ):
     """
     Инициализирует RAG систему для конкретного отдела
@@ -165,7 +167,11 @@ async def get_rag_status(department_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при проверке статуса RAG: {str(e)}")
 
 @router.delete("/reset/{department_id}")
-async def reset_rag_for_department(department_id: int, db: Session = Depends(get_db)):
+async def reset_rag_for_department(
+    department_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_admin),
+):
     """
     Сбрасывает RAG систему для отдела (удаляет векторную БД)
     """
