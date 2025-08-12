@@ -8,6 +8,7 @@ import json
 
 from database import get_db
 from models_db import Quiz, Question, UserQuizAttempt, UserAnswer, User, Department, Access
+from routes.user_routes import get_current_user, require_admin, is_admin
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
 
@@ -233,9 +234,13 @@ def list_quizzes(
     user_id: int,
     is_test: Optional[bool] = None,
     department_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Получение списка тестов и анкет с учетом прав доступа пользователя"""
+    # Разрешаем только администратору или владельцу user_id
+    if not is_admin(current_user) and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     # Получаем информацию о пользователе
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -282,8 +287,10 @@ def list_quizzes(
     return quizzes
 
 @router.get("/{quiz_id}", response_model=QuizResponse)
-def get_quiz(quiz_id: int, user_id: int, db: Session = Depends(get_db)):
+def get_quiz(quiz_id: int, user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получение информации о тесте/анкете по ID"""
+    if not is_admin(current_user) and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     # Получаем тест/анкету
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()
     if not quiz:
@@ -320,8 +327,10 @@ def get_quiz(quiz_id: int, user_id: int, db: Session = Depends(get_db)):
     return result
 
 @router.post("/attempt", response_model=AttemptResponse, status_code=status.HTTP_201_CREATED)
-def submit_attempt(attempt_data: AttemptCreate, user_id: int, db: Session = Depends(get_db)):
+def submit_attempt(attempt_data: AttemptCreate, user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Отправка ответов на тест/анкету"""
+    if not is_admin(current_user) and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     # Получаем тест/анкету
     quiz = db.query(Quiz).filter(Quiz.id == attempt_data.quiz_id).first()
     if not quiz:
@@ -407,8 +416,10 @@ def submit_attempt(attempt_data: AttemptCreate, user_id: int, db: Session = Depe
     return result
 
 @router.get("/attempts/{user_id}", response_model=List[AttemptListItem])
-def get_user_attempts(user_id: int, quiz_id: Optional[int] = None, db: Session = Depends(get_db)):
+def get_user_attempts(user_id: int, quiz_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получение списка попыток пользователя"""
+    if not is_admin(current_user) and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     # Проверяем существование пользователя
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -456,8 +467,10 @@ def get_user_attempts(user_id: int, quiz_id: Optional[int] = None, db: Session =
     return attempts
 
 @router.get("/attempt/{attempt_id}", response_model=AttemptResponse)
-def get_attempt_details(attempt_id: int, user_id: int, db: Session = Depends(get_db)):
+def get_attempt_details(attempt_id: int, user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Получение детальной информации о попытке"""
+    if not is_admin(current_user) and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     # Получаем попытку
     attempt = db.query(UserQuizAttempt).filter(UserQuizAttempt.id == attempt_id).first()
     if not attempt:
@@ -553,7 +566,7 @@ def get_quiz_statistics(quiz_id: int, db: Session = Depends(get_db)):
     }
 
 @router.delete("/{quiz_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_quiz(quiz_id: int, user_id: Optional[int] = None, db: Session = Depends(get_db)):
+def delete_quiz(quiz_id: int, user_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Удаление теста/анкеты"""
     # Получаем тест/анкету
     quiz = db.query(Quiz).filter(Quiz.id == quiz_id).first()

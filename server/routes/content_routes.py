@@ -324,7 +324,8 @@ class ContentUpdate(BaseModel):
 async def update_content(
     content_id: int,
     content_data: ContentUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     # Отладочный вывод входных параметров
     print(f"Получены параметры: content_id={content_id}, data={content_data}")
@@ -369,8 +370,14 @@ async def get_content_by_access_and_department(
     access_level: int,
     department_id: int,
     tag_id: int = None,  # Новый параметр для фильтрации по тегу
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Ограничиваем доступ: пользователь должен соответствовать запрошенным access/department или быть админом
+    if not (is_admin(current_user) or (
+        current_user.access_id == access_level and current_user.department_id == department_id
+    )):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
     try:
         query = db.query(Content).filter(
             Content.access_level == access_level,
@@ -401,11 +408,20 @@ async def get_content_by_access_and_department(
     
     
 @router.get("/content/{content_id}")
-async def get_content_by_id(content_id: int, db: Session = Depends(get_db)):
+async def get_content_by_id(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         content = db.query(Content).filter(Content.id == content_id).first()
         if content is None:
             raise HTTPException(status_code=404, detail="Контент не найден")
+        # Проверяем права доступа
+        if not (is_admin(current_user) or (
+            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
         
         return {
             "id": content.id,
@@ -416,6 +432,8 @@ async def get_content_by_id(content_id: int, db: Session = Depends(get_db)):
             "department_id": content.department_id,
             "tag_id": content.tag_id
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении контента: {str(e)}")
 
@@ -458,7 +476,10 @@ async def delete_content(
 
 
 @router.get("/all")
-async def get_all_content(db: Session = Depends(get_db)):
+async def get_all_content(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         contents = db.query(Content).all()
         return [
@@ -513,7 +534,15 @@ async def download_file(
 
 
 @router.get("/user/{user_id}/content/by-tags/{tag_id}")
-async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Session = Depends(get_db)):
+async def get_user_content_by_tags_and_tag_id(
+    user_id: int,
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Доступ: только сам пользователь или администратор
+    if not (is_admin(current_user) or current_user.id == user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
     try:
         # Получаем пользователя по user_id
         user = db.query(User).filter(User.id == user_id).first()
@@ -546,8 +575,12 @@ async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Ses
 async def search_documents(
     user_id: int,
     search_query: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Доступ: только сам пользователь или администратор
+    if not (is_admin(current_user) or current_user.id == user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
     try:
         # Получаем пользователя по user_id для проверки прав доступа
         user = db.query(User).filter(User.id == user_id).first()
@@ -645,7 +678,10 @@ async def delete_tag(
         raise HTTPException(status_code=500, detail=f"Ошибка при удалении тега: {str(e)}")
 
 @router.get("/list-files/{department_id}")
-async def list_department_files(department_id: int):
+async def list_department_files(
+    department_id: int,
+    current_user: User = Depends(require_admin),
+):
     """
     Возвращает список файлов в директории отдела.
     """
@@ -697,7 +733,11 @@ async def list_department_files(department_id: int):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении списка файлов: {str(e)}")
 
 @router.delete("/delete-file/{department_id}/{filename}")
-async def delete_department_file(department_id: int, filename: str):
+async def delete_department_file(
+    department_id: int,
+    filename: str,
+    current_user: User = Depends(require_admin),
+):
     """
     Удаляет конкретный файл из директории отдела.
     """
@@ -743,7 +783,10 @@ async def delete_department_file(department_id: int, filename: str):
         raise HTTPException(status_code=500, detail=f"Ошибка при удалении файла: {str(e)}")
 
 @router.delete("/delete-all-files/{department_id}")
-async def delete_all_department_files(department_id: int):
+async def delete_all_department_files(
+    department_id: int,
+    current_user: User = Depends(require_admin),
+):
     """
     Удаляет все файлы из директории отдела.
     """
@@ -796,7 +839,7 @@ async def delete_all_department_files(department_id: int):
         raise HTTPException(status_code=500, detail=f"Ошибка при удалении файлов: {str(e)}")
 
 @router.get("/list-all-departments")
-async def list_all_departments():
+async def list_all_departments(current_user: User = Depends(require_admin)):
     """
     Возвращает список всех отделов с файлами.
     """

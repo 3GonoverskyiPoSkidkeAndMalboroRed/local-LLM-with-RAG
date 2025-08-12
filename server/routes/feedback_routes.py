@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, status
 import os
 from sqlalchemy.orm import Session
 from database import get_db
 from models_db import Feedback, User
+from routes.user_routes import get_current_user, require_admin, is_admin
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, Response
 from typing import List, Optional
@@ -20,12 +21,16 @@ async def create_feedback(
     user_id: int = Form(...),
     text: str = Form(...),
     photo: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Создает новое сообщение обратной связи с возможностью прикрепления фото
     """
     try:
+        # Пользователь может создавать отзыв только от своего имени (или админ)
+        if not (is_admin(current_user) or current_user.id == user_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
         # Проверяем существование пользователя
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -50,12 +55,17 @@ async def create_feedback(
         
         return {"message": "Сообщение обратной связи успешно создано", "feedback_id": new_feedback.id}
     
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка при создании сообщения: {str(e)}")
 
 @router.get("/list")
-async def get_feedback_list(db: Session = Depends(get_db)):
+async def get_feedback_list(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     """
     Получает список всех сообщений обратной связи (доступно только для администраторов)
     """
@@ -93,14 +103,22 @@ async def get_feedback_list(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении списка сообщений: {str(e)}")
 
 @router.get("/photo/{feedback_id}")
-async def get_feedback_photo(feedback_id: int, db: Session = Depends(get_db)):
+async def get_feedback_photo(
+    feedback_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Получает фото для сообщения обратной связи по его ID
     """
     try:
-        # В реальном приложении здесь должна быть проверка прав администратора
-        # if not current_user.is_admin:
-        #     raise HTTPException(status_code=403, detail="Доступ запрещен")
+        # Доступ: админ или автор сообщения
+        if not is_admin(current_user):
+            fb = db.query(Feedback).filter(Feedback.id == feedback_id).first()
+            if not fb:
+                raise HTTPException(status_code=404, detail="Сообщение не найдено")
+            if fb.user_id != current_user.id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
         
         # Находим сообщение по ID
         feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
@@ -120,14 +138,22 @@ async def get_feedback_photo(feedback_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении фото: {str(e)}")
 
 @router.get("/detail/{feedback_id}")
-async def get_feedback_detail(feedback_id: int, db: Session = Depends(get_db)):
+async def get_feedback_detail(
+    feedback_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Получает детальную информацию о сообщении обратной связи по его ID
     """
     try:
-        # В реальном приложении здесь должна быть проверка прав администратора
-        # if not current_user.is_admin:
-        #     raise HTTPException(status_code=403, detail="Доступ запрещен")
+        # Доступ: админ или автор сообщения
+        if not is_admin(current_user):
+            fb = db.query(Feedback).filter(Feedback.id == feedback_id).first()
+            if not fb:
+                raise HTTPException(status_code=404, detail="Сообщение не найдено")
+            if fb.user_id != current_user.id:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
         
         # Находим сообщение по ID
         feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
