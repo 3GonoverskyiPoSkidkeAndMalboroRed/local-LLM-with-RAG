@@ -30,6 +30,7 @@ from routes.feedback_routes import router as feedback_router
 from yandex_cloud_config import yandex_cloud_config
 from routes.yandex_ai_routes import router as yandex_ai_router
 from routes.yandex_rag_routes import router as yandex_rag_router
+from routes.web_search_routes import router as web_search_router
 
 # Выполняем миграцию при запуске
 try:
@@ -58,6 +59,7 @@ app.include_router(user_router)
 app.include_router(feedback_router)
 app.include_router(yandex_ai_router)
 app.include_router(yandex_rag_router)
+app.include_router(web_search_router)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -167,24 +169,6 @@ async def get_departments_list(db: Session = Depends(get_db)):
 async def get_access_levels_list(db: Session = Depends(get_db)):
     access_levels = db.query(Access).all()
     return [{"id": access.id, "access_name": access.access_name} for access in access_levels]
-
-@app.get("/tables")
-async def get_tables(db: Session = Depends(get_db), current_user: User = Depends(__import__('routes.user_routes', fromlist=['require_admin']).require_admin)):
-    try:
-        inspector = inspect(db.bind)
-        tables = inspector.get_table_names()
-        return {"tables": tables}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при получении таблиц: {str(e)}")
-
-@app.get("/tables/{table_name}")
-async def get_table_info(table_name: str, db: Session = Depends(get_db), current_user: User = Depends(__import__('routes.user_routes', fromlist=['require_admin']).require_admin)):
-    try:
-        inspector = inspect(db.bind)
-        columns = inspector.get_columns(table_name)
-        return {"table": table_name, "columns": columns}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при получении информации о таблице {table_name}: {str(e)}")
 
 class TagCreate(BaseModel):
     tag_name: str
