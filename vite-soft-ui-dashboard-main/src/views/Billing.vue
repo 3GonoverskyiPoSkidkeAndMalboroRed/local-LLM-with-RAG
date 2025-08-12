@@ -8,33 +8,59 @@
           </div>
           <div class="card-body">
             <div class="mb-4">
-              <label class="form-label">Режим чата</label>
-              <div class="form-check">
-                <input class="form-check-input" type="radio" name="chatMode" id="modeRAG" value="rag" v-model="chatMode">
-                <label class="form-check-label" for="modeRAG">
-                  С базой знаний (RAG)
-                </label>
-              </div>
-              <div class="form-check">
-                <input class="form-check-input" type="radio" name="chatMode" id="modeSimple" value="simple" v-model="chatMode">
-                <label class="form-check-label" for="modeSimple">
-                  Простой чат
-                </label>
-              </div>
-              <div v-if="chatMode === 'simple'" class="mt-2">
-                <label class="form-label">Режим простого чата:</label>
+              <label class="form-label fw-bold">Режим чата</label>
+              
+              <!-- RAG режим -->
+              <div class="chat-mode-block mb-3">
                 <div class="form-check">
-                  <input class="form-check-input" type="radio" name="simpleMode" id="modeGeneration" value="generation" v-model="simpleMode">
-                  <label class="form-check-label" for="modeGeneration">
-                    Обычная генерация
+                  <input class="form-check-input" type="radio" name="chatMode" id="modeRAG" value="rag" v-model="chatMode">
+                  <label class="form-check-label fw-semibold" for="modeRAG">
+                    <i class="fas fa-database me-2"></i>
+                    С базой знаний (RAG)
                   </label>
                 </div>
+                <div v-if="chatMode === 'rag'" class="sub-mode-block mt-2">
+                  <label class="form-label text-muted small">Режим RAG:</label>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="ragMode" id="modeRAGOnly" value="ragOnly" v-model="ragMode">
+                    <label class="form-check-label" for="modeRAGOnly">
+                      Обычный RAG
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="ragMode" id="modeRAGWeb" value="ragWeb" v-model="ragMode">
+                    <label class="form-check-label" for="modeRAGWeb">
+                      <i class="fas fa-search me-1"></i>
+                      RAG + Поиск в интернете
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Простой чат -->
+              <div class="chat-mode-block">
                 <div class="form-check">
-                  <input class="form-check-input" type="radio" name="simpleMode" id="modeWebSearch" value="webSearch" v-model="simpleMode">
-                  <label class="form-check-label" for="modeWebSearch">
-                    <i class="fas fa-search"></i>
-                    Поиск в интернете
+                  <input class="form-check-input" type="radio" name="chatMode" id="modeSimple" value="simple" v-model="chatMode">
+                  <label class="form-check-label fw-semibold" for="modeSimple">
+                    <i class="fas fa-comments me-2"></i>
+                    Простой чат
                   </label>
+                </div>
+                <div v-if="chatMode === 'simple'" class="sub-mode-block mt-2">
+                  <label class="form-label text-muted small">Режим простого чата:</label>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="simpleMode" id="modeGeneration" value="generation" v-model="simpleMode">
+                    <label class="form-check-label" for="modeGeneration">
+                      Обычная генерация
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="simpleMode" id="modeWebSearch" value="webSearch" v-model="simpleMode">
+                    <label class="form-check-label" for="modeWebSearch">
+                      <i class="fas fa-search me-1"></i>
+                      Поиск в интернете
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -129,6 +155,7 @@ export default {
       chatMessages: [],
       isLoading: false,
       chatMode: "rag", // По умолчанию используем режим с RAG
+      ragMode: "ragOnly", // По умолчанию обычный RAG
       simpleMode: "generation", // По умолчанию обычная генерация для простого чата
       requestInProgress: false, // Флаг для отслеживания текущего запроса
       requestTimeout: null, // Таймер для отмены запроса
@@ -226,6 +253,111 @@ export default {
       }
     },
     
+    async processHybridRAG(message, departmentId) {
+      try {
+        // 1. RAG запрос - получаем информацию из документов
+        console.log("Выполняем RAG запрос...");
+        const ragResponse = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-rag/query`, { 
+          department_id: parseInt(departmentId),
+          question: message
+        }, {
+          noRetry: true
+        });
+        
+        const ragData = ragResponse.data;
+        const ragAnswer = ragData.answer || 'Информация из документов не найдена.';
+        const ragSources = ragData.sources || [];
+        const noSourcesFound = ragData.no_sources_found || false;
+        
+        // 2. Веб-поиск - получаем актуальную информацию из интернета
+        console.log("Выполняем веб-поиск...");
+        const webResponse = await axios.post(`${import.meta.env.VITE_API_URL}/api/web-search/query`, {
+          query: message
+        }, {
+          noRetry: true
+        });
+        
+        const webData = webResponse.data;
+        const webAnswer = webData.success && webData.results && webData.results.length > 0 
+          ? webData.results[0].snippet 
+          : 'Информация из интернета не найдена.';
+        
+        // 3. Объединяем и анализируем информацию через ИИ
+        console.log("Объединяем и анализируем информацию...");
+        const combinedPrompt = `
+Запрос пользователя: "${message}"
+
+ИНФОРМАЦИЯ ИЗ ДОКУМЕНТОВ (RAG):
+${ragAnswer}
+
+ИНФОРМАЦИЯ ИЗ ИНТЕРНЕТА:
+${webAnswer}
+
+Пожалуйста, проанализируй обе части информации и предоставь:
+1. Комплексный ответ на запрос пользователя, объединив данные из документов и интернета
+2. Рекомендации и дополнительные советы по запросу
+3. Оценку актуальности и надежности полученной информации
+
+Ответ должен быть структурированным и полезным для пользователя.
+        `;
+        
+        const analysisResponse = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-ai/generate`, {
+          prompt: combinedPrompt,
+          model: "yandexgpt",
+          max_tokens: 2000,
+          temperature: 0.7
+        }, {
+          noRetry: true
+        });
+        
+        const analysisAnswer = analysisResponse.data.text;
+        
+        // 4. Формируем итоговый ответ
+        const finalAnswer = `
+🤖 **АНАЛИЗ И РЕКОМЕНДАЦИИ:**
+
+${analysisAnswer}
+
+---
+
+📄 **ИНФОРМАЦИЯ ИЗ ДОКУМЕНТОВ:**
+${noSourcesFound ? '⚠️ В документах не найдено релевантной информации.' : ragAnswer}
+
+🌐 **ИНФОРМАЦИЯ ИЗ ИНТЕРНЕТА:**
+${webAnswer}
+
+${ragSources.length > 0 ? `
+📚 **Источники из документов:**
+${ragSources.map((source, index) => `${index + 1}. ${source.title || source.filename || 'Без названия'}`).join('\n')}
+` : ''}
+        `;
+        
+        // Добавляем итоговый ответ в чат
+        this.chatMessages.push({
+          role: 'assistant',
+          content: finalAnswer,
+          sources: ragSources,
+          no_sources_found: noSourcesFound,
+          userQuery: message,
+          hybridMode: true
+        });
+        
+      } catch (error) {
+        console.error("Ошибка в гибридном режиме RAG:", error);
+        
+        const errorMessage = error.response?.data?.detail || 
+                           error.response?.data?.error || 
+                           error.message || 
+                           'Ошибка при обработке гибридного запроса';
+        
+        this.chatMessages.push({
+          role: 'assistant',
+          content: `❌ Ошибка в гибридном режиме: ${errorMessage}`,
+          userQuery: message
+        });
+      }
+    },
+    
     async sendMessage() {
       if (!this.userMessage.trim()) return;
       
@@ -270,6 +402,8 @@ export default {
       let userContent = this.userMessage;
       if (this.chatMode === "simple" && this.simpleMode === "webSearch") {
         userContent += ' 🔍 [Поиск в интернете]';
+      } else if (this.chatMode === "rag" && this.ragMode === "ragWeb") {
+        userContent += ' 🔄 [RAG + Поиск в интернете]';
       }
       
       this.chatMessages.push({
@@ -330,22 +464,27 @@ export default {
             return;
           }
           
-          // Используем новый эндпоинт Yandex RAG
-          response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-rag/query`, { 
-            department_id: parseInt(departmentId),
-            question: message
-          }, {
-            noRetry: true
-          });
-          
-          // Добавляем ответ в чат
-          this.chatMessages.push({
-            role: 'assistant',
-            content: response.data.answer || 'Ответ получен, но содержимое пустое.',
-            sources: response.data.sources || [],
-            no_sources_found: response.data.no_sources_found || false,
-            userQuery: message // Сохраняем запрос пользователя
-          });
+          if (this.ragMode === "ragWeb") {
+            // Гибридный режим: RAG + веб-поиск
+            await this.processHybridRAG(message, departmentId);
+          } else {
+            // Обычный RAG режим
+            response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-rag/query`, { 
+              department_id: parseInt(departmentId),
+              question: message
+            }, {
+              noRetry: true
+            });
+            
+            // Добавляем ответ в чат
+            this.chatMessages.push({
+              role: 'assistant',
+              content: response.data.answer || 'Ответ получен, но содержимое пустое.',
+              sources: response.data.sources || [],
+              no_sources_found: response.data.no_sources_found || false,
+              userQuery: message
+            });
+          }
           
         } else {
           // Простой чат - проверяем режим
@@ -469,5 +608,46 @@ export default {
 
 .chat-container::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Стили для блоков режимов чата */
+.chat-mode-block {
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+}
+
+.chat-mode-block:hover {
+  border-color: #dee2e6;
+  background-color: #ffffff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.sub-mode-block {
+  border-left: 3px solid #007bff;
+  padding-left: 15px;
+  margin-left: 10px;
+  background-color: #ffffff;
+  border-radius: 0 6px 6px 0;
+  padding: 10px 15px;
+  margin-top: 10px;
+}
+
+/* Активный режим */
+.chat-mode-block:has(.form-check-input:checked) {
+  border-color: #007bff;
+  background-color: #e7f3ff;
+  box-shadow: 0 2px 8px rgba(0,123,255,0.15);
+}
+
+/* Стили для иконок */
+.chat-mode-block .fas {
+  color: #6c757d;
+}
+
+.chat-mode-block:has(.form-check-input:checked) .fas {
+  color: #007bff;
 }
 </style>
