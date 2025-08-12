@@ -63,23 +63,23 @@
     <!-- FAQ блок -->
     <div class="row mt-4">
       <div class="col-12">
-        <div class="card mb-4 faq-card">
-          <div class="card-header pb-0 d-flex align-items-center">
+        <div class="faq-container">
+          <div class="faq-header mb-4">
             <i class="fas fa-question-circle me-2 text-info"></i>
             <h4 class="mb-0 fw-bold">Часто задаваемые вопросы</h4>
           </div>
-          <div class="card-body">
+          <div class="faq-content">
             <div class="accordion" id="faqAccordion">
               <!-- Общие вопросы -->
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="faqHeadingOne">
-                  <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseOne" aria-expanded="true" aria-controls="faqCollapseOne">
+              <div class="faq-block">
+                <h2 class="faq-header-item" id="faqHeadingOne">
+                  <button class="faq-button collapsed" type="button"  data-bs-target="#faqCollapseOne" aria-expanded="false" aria-controls="faqCollapseOne">
                     <i class="fas fa-search me-2"></i>
                     Я не могу найти нужный документ. Что делать?
                   </button>
                 </h2>
-                <div id="faqCollapseOne" class="accordion-collapse collapse show" aria-labelledby="faqHeadingOne" data-bs-parent="#faqAccordion">
-                  <div class="accordion-body">
+                <div id="faqCollapseOne" class="faq-collapse collapse" aria-labelledby="faqHeadingOne" >
+                  <div class="faq-body">
                     <p>Попробуйте:</p>
                     <ul>
                       <li>Использовать разные ключевые слова для поиска</li>
@@ -90,15 +90,15 @@
                 </div>
               </div>
 
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="faqHeadingTwo">
-                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseTwo" aria-expanded="false" aria-controls="faqCollapseTwo">
+              <div class="faq-block">
+                <h2 class="faq-header-item" id="faqHeadingTwo">
+                  <button class="faq-button collapsed" type="button"  data-bs-target="#faqCollapseTwo" aria-expanded="false" aria-controls="faqCollapseTwo">
                     <i class="fas fa-robot me-2"></i>
                     ИИ-ассистент не отвечает на мой вопрос. Почему?
                   </button>
                 </h2>
-                <div id="faqCollapseTwo" class="accordion-collapse collapse" aria-labelledby="faqHeadingTwo" data-bs-parent="#faqAccordion">
-                  <div class="accordion-body">
+                <div id="faqCollapseTwo" class="faq-collapse collapse" aria-labelledby="faqHeadingTwo" >
+                  <div class="faq-body">
                     <p>Возможные причины:</p>
                     <ul>
                       <li>RAG система не инициализирована для вашего отдела</li>
@@ -109,30 +109,30 @@
                 </div>
               </div>
 
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="faqHeadingThree">
-                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseThree" aria-expanded="false" aria-controls="faqCollapseThree">
+              <div class="faq-block">
+                <h2 class="faq-header-item" id="faqHeadingThree">
+                  <button class="faq-button collapsed" type="button"  data-bs-target="#faqCollapseThree" aria-expanded="false" aria-controls="faqCollapseThree">
                     <i class="fas fa-folder-open me-2"></i>
                     Как узнать, какие документы доступны моему отделу?
                   </button>
                 </h2>
-                <div id="faqCollapseThree" class="accordion-collapse collapse" aria-labelledby="faqHeadingThree" data-bs-parent="#faqAccordion">
-                  <div class="accordion-body">
+                <div id="faqCollapseThree" class="faq-collapse collapse" aria-labelledby="faqHeadingThree" >
+                  <div class="faq-body">
                     <p>Перейдите в раздел "Документы" - там отображаются только доступные вам файлы согласно уровню доступа.</p>
                   </div>
                 </div>
               </div>
 
               <!-- Технические проблемы -->
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="faqHeadingFour">
-                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseFour" aria-expanded="false" aria-controls="faqCollapseFour">
+              <div class="faq-block">
+                <h2 class="faq-header-item" id="faqHeadingFour">
+                  <button class="faq-button collapsed" type="button"  data-bs-target="#faqCollapseFour" aria-expanded="false" aria-controls="faqCollapseFour">
                     <i class="fas fa-tachometer-alt me-2"></i>
                     Страница загружается медленно
                   </button>
                 </h2>
-                <div id="faqCollapseFour" class="accordion-collapse collapse" aria-labelledby="faqHeadingFour" data-bs-parent="#faqAccordion">
-                  <div class="accordion-body">
+                <div id="faqCollapseFour" class="faq-collapse collapse" aria-labelledby="faqHeadingFour" >
+                  <div class="faq-body">
                     <ul>
                       <li>Проверьте интернет-соединение</li>
                       <li>Обновите страницу (F5)</li>
@@ -142,15 +142,15 @@
                 </div>
               </div>
 
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="faqHeadingFive">
-                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseFive" aria-expanded="false" aria-controls="faqCollapseFive">
+              <div class="faq-block">
+                <h2 class="faq-header-item" id="faqHeadingFive">
+                  <button class="faq-button collapsed" type="button"  data-bs-target="#faqCollapseFive" aria-expanded="false" aria-controls="faqCollapseFive">
                     <i class="fas fa-upload me-2"></i>
                     Не могу загрузить файл
                   </button>
                 </h2>
-                <div id="faqCollapseFive" class="accordion-collapse collapse" aria-labelledby="faqHeadingFive" data-bs-parent="#faqAccordion">
-                  <div class="accordion-body">
+                <div id="faqCollapseFive" class="faq-collapse collapse" aria-labelledby="faqHeadingFive" >
+                  <div class="faq-body">
                     <p>Убедитесь, что:</p>
                     <ul>
                       <li>Размер файла не превышает лимит</li>
@@ -161,30 +161,30 @@
                 </div>
               </div>
 
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="faqHeadingSix">
-                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseSix" aria-expanded="false" aria-controls="faqCollapseSix">
+              <div class="faq-block">
+                <h2 class="faq-header-item" id="faqHeadingSix">
+                  <button class="faq-button collapsed" type="button"  data-bs-target="#faqCollapseSix" aria-expanded="false" aria-controls="faqCollapseSix">
                     <i class="fas fa-key me-2"></i>
                     Забыл пароль
                   </button>
                 </h2>
-                <div id="faqCollapseSix" class="accordion-collapse collapse" aria-labelledby="faqHeadingSix" data-bs-parent="#faqAccordion">
-                  <div class="accordion-body">
+                <div id="faqCollapseSix" class="faq-collapse collapse" aria-labelledby="faqHeadingSix" >
+                  <div class="faq-body">
                     <p>Обратитесь к системному администратору для восстановления доступа.</p>
                   </div>
                 </div>
               </div>
 
               <!-- Работа с ИИ -->
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="faqHeadingSeven">
-                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseSeven" aria-expanded="false" aria-controls="faqCollapseSeven">
+              <div class="faq-block">
+                <h2 class="faq-header-item" id="faqHeadingSeven">
+                  <button class="faq-button collapsed" type="button"  data-bs-target="#faqCollapseSeven" aria-expanded="false" aria-controls="faqCollapseSeven">
                     <i class="fas fa-brain me-2"></i>
                     Как получить более точные ответы от ИИ?
                   </button>
                 </h2>
-                <div id="faqCollapseSeven" class="accordion-collapse collapse" aria-labelledby="faqHeadingSeven" data-bs-parent="#faqAccordion">
-                  <div class="accordion-body">
+                <div id="faqCollapseSeven" class="faq-collapse collapse" aria-labelledby="faqHeadingSeven" >
+                  <div class="faq-body">
                     <ul>
                       <li>Используйте режим "С базой знаний"</li>
                       <li>Формулируйте вопросы конкретно</li>
@@ -194,30 +194,30 @@
                 </div>
               </div>
 
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="faqHeadingEight">
-                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseEight" aria-expanded="false" aria-controls="faqCollapseEight">
+              <div class="faq-block">
+                <h2 class="faq-header-item" id="faqHeadingEight">
+                  <button class="faq-button collapsed" type="button"  data-bs-target="#faqCollapseEight" aria-expanded="false" aria-controls="faqCollapseEight">
                     <i class="fas fa-history me-2"></i>
                     Можно ли сохранить историю чата?
                   </button>
                 </h2>
-                <div id="faqCollapseEight" class="accordion-collapse collapse" aria-labelledby="faqHeadingEight" data-bs-parent="#faqAccordion">
-                  <div class="accordion-body">
+                <div id="faqCollapseEight" class="faq-collapse collapse" aria-labelledby="faqHeadingEight" >
+                  <div class="faq-body">
                     <p>История чата сохраняется в рамках текущей сессии. Для долгосрочного хранения скопируйте важную информацию.</p>
                   </div>
                 </div>
               </div>
 
               <!-- Контакты и поддержка -->
-              <div class="accordion-item">
-                <h2 class="accordion-header" id="faqHeadingNine">
-                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCollapseNine" aria-expanded="false" aria-controls="faqCollapseNine">
+              <div class="faq-block">
+                <h2 class="faq-header-item" id="faqHeadingNine">
+                  <button class="faq-button collapsed" type="button"  data-bs-target="#faqCollapseNine" aria-expanded="false" aria-controls="faqCollapseNine">
                     <i class="fas fa-headset me-2"></i>
                     Контакты и поддержка
                   </button>
                 </h2>
-                <div id="faqCollapseNine" class="accordion-collapse collapse" aria-labelledby="faqHeadingNine" data-bs-parent="#faqAccordion">
-                  <div class="accordion-body">
+                <div id="faqCollapseNine" class="faq-collapse collapse" aria-labelledby="faqHeadingNine" >
+                  <div class="faq-body">
                     <p>При возникновении проблем или вопросов обращайтесь:</p>
                     <ul>
                       <li><strong>Администратор системы:</strong> neverov.p@spectronxray.ru</li>
@@ -439,6 +439,61 @@ export default {
     isVideo(extension) {
       return ['mp4', 'webm', 'avi', 'mov'].includes(extension);
     }
+  },
+  mounted() {
+    // Полностью кастомная реализация FAQ с плавной анимацией
+    this.$nextTick(() => {
+      const faqButtons = document.querySelectorAll('.faq-button');
+      faqButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const targetId = button.getAttribute('data-bs-target');
+          const targetElement = document.querySelector(targetId);
+          
+          if (targetElement) {
+            const isOpen = targetElement.classList.contains('show');
+            
+            if (isOpen) {
+              // Плавно закрываем элемент
+              targetElement.style.maxHeight = targetElement.scrollHeight + 'px';
+              
+              // Небольшая задержка для начала анимации
+              setTimeout(() => {
+                targetElement.style.maxHeight = '0px';
+              }, 10);
+              
+              // Убираем класс show после завершения анимации
+              setTimeout(() => {
+                targetElement.classList.remove('show');
+                targetElement.style.maxHeight = '';
+              }, 300);
+              
+              button.classList.add('collapsed');
+              button.setAttribute('aria-expanded', 'false');
+            } else {
+              // Плавно открываем элемент
+              targetElement.classList.add('show');
+              targetElement.style.maxHeight = '0px';
+              
+              // Небольшая задержка для начала анимации
+              setTimeout(() => {
+                targetElement.style.maxHeight = targetElement.scrollHeight + 'px';
+              }, 10);
+              
+              // Убираем inline стили после завершения анимации
+              setTimeout(() => {
+                targetElement.style.maxHeight = '';
+              }, 300);
+              
+              button.classList.remove('collapsed');
+              button.setAttribute('aria-expanded', 'true');
+            }
+          }
+        });
+      });
+    });
   }
 };
 </script>
@@ -528,6 +583,135 @@ export default {
 .btn-info {
   background-color: #173376;
   border-color: #7b7b7b;
+}
+
+/* Стили для FAQ блоков */
+.faq-container {
+  margin-bottom: 2rem;
+}
+
+.faq-header {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.faq-header h4 {
+  color: white !important;
+}
+
+.faq-header .fas {
+  color: white !important;
+}
+
+.faq-content {
+  padding: 0;
+}
+
+.faq-block {
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.faq-block:hover {
+  border-color: #dee2e6;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.faq-header-item {
+  margin: 0;
+}
+
+.faq-button {
+  width: 100%;
+  padding: 20px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #344767;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.faq-button:hover {
+  background-color: #e7f3ff;
+  color: #007bff;
+}
+
+.faq-button:not(.collapsed) {
+  background-color: #e7f3ff;
+  color: #007bff;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.faq-button::after {
+  content: '\f107';
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+  position: absolute;
+  right: 20px;
+  transition: transform 0.3s ease;
+}
+
+.faq-button:not(.collapsed)::after {
+  transform: rotate(180deg);
+}
+
+.faq-collapse {
+  background-color: #ffffff;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out;
+}
+
+.faq-collapse.show {
+  max-height: 500px; /* Достаточно для любого контента */
+}
+
+.faq-body {
+  padding: 20px;
+  border-top: 1px solid #f8f9fa;
+  line-height: 1.6;
+}
+
+.faq-body p {
+  margin-bottom: 15px;
+  color: #495057;
+}
+
+.faq-body ul {
+  margin-bottom: 15px;
+  padding-left: 20px;
+}
+
+.faq-body li {
+  margin-bottom: 8px;
+  color: #6c757d;
+}
+
+/* Иконки в FAQ */
+.faq-button .fas {
+  color: #6c757d;
+  transition: color 0.3s ease;
+}
+
+.faq-button:hover .fas,
+.faq-button:not(.collapsed) .fas {
+  color: #007bff;
 }
 
 </style>
