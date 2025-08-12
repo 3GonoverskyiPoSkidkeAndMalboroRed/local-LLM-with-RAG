@@ -9,17 +9,14 @@ router = APIRouter(prefix="/api/web-search", tags=["Web Search"])
 
 class WebSearchRequest(BaseModel):
     query: str = Field(..., description="Поисковый запрос")
-    top_n: int = Field(3, ge=1, le=10, description="Количество результатов (1-10)")
-    fetch_pages: bool = Field(True, description="Загружать и извлекать тексты страниц")
-    compress: bool = Field(True, description="Сжимать извлеченные тексты (до ~1200 символов)")
 
 
 class WebSearchItem(BaseModel):
     title: str
     url: str
     snippet: Optional[str] = None
-    content_excerpt: Optional[str] = None
-    content: Optional[str] = None
+    generated_response: Optional[bool] = None
+    query: Optional[str] = None
 
 
 class WebSearchResponse(BaseModel):
@@ -31,18 +28,14 @@ class WebSearchResponse(BaseModel):
 @router.post("/query", response_model=WebSearchResponse)
 async def web_search_endpoint(req: WebSearchRequest):
     """
-    Веб‑поиск по Яндекс Search API v2, при необходимости извлекает контент страниц и сжимает его.
+    Генеративный поиск через Yandex Cloud ML SDK.
+    Возвращает сгенерированный ИИ ответ на основе веб-поиска.
     Требуются переменные окружения SEARCH_API_API_KEY (или SEARCH_API_IAM_TOKEN) и YC_FOLDER_ID.
     """
     try:
-        results = await web_search_service.search_and_extract(
-            query=req.query,
-            top_n=req.top_n,
-            fetch_pages=req.fetch_pages,
-            compress=req.compress,
-        )
+        results = await web_search_service.search(query=req.query)
         return WebSearchResponse(success=True, results=results)
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка веб-поиска: {e}")
+        raise HTTPException(status_code=500, detail=f"Ошибка генеративного поиска: {e}")
