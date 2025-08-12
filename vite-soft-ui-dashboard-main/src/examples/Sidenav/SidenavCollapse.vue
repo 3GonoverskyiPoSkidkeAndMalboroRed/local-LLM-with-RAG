@@ -1,6 +1,10 @@
 <template>
-  <router-link class="nav-link" :to="to" v-bind="$attrs">
-
+  <router-link 
+    class="nav-link" 
+    :to="to" 
+    v-bind="$attrs"
+    active-class="active"
+  >
     <span
       class="nav-link-text"
       :class="$store.state.isRTL ? ' me-1' : 'ms-1'"
