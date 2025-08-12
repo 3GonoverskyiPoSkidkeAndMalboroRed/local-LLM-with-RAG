@@ -21,6 +21,22 @@
                   Простой чат
                 </label>
               </div>
+              <div v-if="chatMode === 'simple'" class="mt-2">
+                <label class="form-label">Режим простого чата:</label>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="simpleMode" id="modeGeneration" value="generation" v-model="simpleMode">
+                  <label class="form-check-label" for="modeGeneration">
+                    Обычная генерация
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="simpleMode" id="modeWebSearch" value="webSearch" v-model="simpleMode">
+                  <label class="form-check-label" for="modeWebSearch">
+                    <i class="fas fa-search"></i>
+                    Поиск в интернете
+                  </label>
+                </div>
+              </div>
             </div>
             
             <!-- Чат -->
@@ -113,6 +129,7 @@ export default {
       chatMessages: [],
       isLoading: false,
       chatMode: "rag", // По умолчанию используем режим с RAG
+      simpleMode: "generation", // По умолчанию обычная генерация для простого чата
       requestInProgress: false, // Флаг для отслеживания текущего запроса
       requestTimeout: null, // Таймер для отмены запроса
       lastRequestTime: 0, // Время последнего запроса
@@ -208,6 +225,7 @@ export default {
         });
       }
     },
+    
     async sendMessage() {
       if (!this.userMessage.trim()) return;
       
@@ -249,9 +267,14 @@ export default {
       });
       
       // Добавляем сообщение пользователя в чат
+      let userContent = this.userMessage;
+      if (this.chatMode === "simple" && this.simpleMode === "webSearch") {
+        userContent += ' 🔍 [Поиск в интернете]';
+      }
+      
       this.chatMessages.push({
         role: 'user',
-        content: this.userMessage
+        content: userContent
       });
       
       const message = this.userMessage;
@@ -325,22 +348,47 @@ export default {
           });
           
         } else {
-          // Используем эндпоинт Yandex AI для простого чата
-          response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-ai/generate`, {
-            prompt: message,
-            model: "yandexgpt-lite",
-            max_tokens: 1000,
-            temperature: 0.6
-          }, {
-            // Отключаем автоматические повторные попытки для запросов к LLM
-            noRetry: true
-          });
-          
-          // Добавляем ответ в чат
-          this.chatMessages.push({
-            role: 'assistant',
-            content: response.data.text
-          });
+          // Простой чат - проверяем режим
+          if (this.simpleMode === "webSearch") {
+            // Поиск в интернете
+            response = await axios.post(`${import.meta.env.VITE_API_URL}/api/web-search/query`, {
+              query: message
+            }, {
+              noRetry: true
+            });
+            
+            // Добавляем ответ в чат
+            if (response.data.success && response.data.results && response.data.results.length > 0) {
+              const result = response.data.results[0];
+              this.chatMessages.push({
+                role: 'assistant',
+                content: result.snippet || 'Ответ получен, но содержимое пустое.',
+                userQuery: message
+              });
+            } else {
+              this.chatMessages.push({
+                role: 'assistant',
+                content: '🔍 Поиск в интернете не дал результатов. Попробуйте переформулировать запрос.',
+                userQuery: message
+              });
+            }
+          } else {
+            // Обычная генерация
+            response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-ai/generate`, {
+              prompt: message,
+              model: "yandexgpt-lite",
+              max_tokens: 1000,
+              temperature: 0.6
+            }, {
+              noRetry: true
+            });
+            
+            // Добавляем ответ в чат
+            this.chatMessages.push({
+              role: 'assistant',
+              content: response.data.text
+            });
+          }
         }
       } catch (error) {
         console.error("Ошибка при отправке сообщения:", error);
