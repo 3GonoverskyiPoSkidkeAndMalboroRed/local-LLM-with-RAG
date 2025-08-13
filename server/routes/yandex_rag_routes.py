@@ -11,7 +11,7 @@ import logging
 from database import get_db
 from models_db import Department, Content
 from yandex_rag_service import yandex_rag_service
-from routes.user_routes import require_admin
+from routes.user_routes import require_admin, get_current_user, is_admin
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,11 @@ async def _initialize_rag_background(department_id: int, force_reload: bool):
         logger.error(f"Ошибка в фоновой инициализации RAG: {e}")
 
 @router.post("/query", response_model=RAGResponse)
-async def query_rag(request: RAGQueryRequest, db: Session = Depends(get_db)):
+async def query_rag(
+    request: RAGQueryRequest, 
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
     """
     Выполняет RAG запрос для получения ответа на основе документов отдела
     """
@@ -116,6 +120,10 @@ async def query_rag(request: RAGQueryRequest, db: Session = Depends(get_db)):
         department = db.query(Department).filter(Department.id == request.department_id).first()
         if not department:
             raise HTTPException(status_code=404, detail=f"Отдел с ID {request.department_id} не найден")
+        
+        # Проверяем доступ к отделу: админ или пользователь из этого отдела
+        if not (is_admin(current_user) or current_user.department_id == request.department_id):
+            raise HTTPException(status_code=403, detail="Нет доступа к отделу")
         
         # Выполняем RAG запрос
         result = await yandex_rag_service.query_rag(
@@ -145,7 +153,11 @@ async def query_rag(request: RAGQueryRequest, db: Session = Depends(get_db)):
         )
 
 @router.get("/status/{department_id}")
-async def get_rag_status(department_id: int, db: Session = Depends(get_db)):
+async def get_rag_status(
+    department_id: int, 
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
     """
     Проверяет статус RAG системы для отдела
     """
@@ -154,6 +166,10 @@ async def get_rag_status(department_id: int, db: Session = Depends(get_db)):
         department = db.query(Department).filter(Department.id == department_id).first()
         if not department:
             raise HTTPException(status_code=404, detail=f"Отдел с ID {department_id} не найден")
+        
+        # Проверяем доступ к отделу: админ или пользователь из этого отдела
+        if not (is_admin(current_user) or current_user.department_id == department_id):
+            raise HTTPException(status_code=403, detail="Нет доступа к отделу")
         
         # Получаем статус RAG системы
         status = await yandex_rag_service.get_rag_status(department_id)
@@ -204,7 +220,8 @@ async def search_documents(
     department_id: int, 
     query: str, 
     k: int = 5,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Выполняет поиск похожих документов без генерации ответа
@@ -214,6 +231,10 @@ async def search_documents(
         department = db.query(Department).filter(Department.id == department_id).first()
         if not department:
             raise HTTPException(status_code=404, detail=f"Отдел с ID {department_id} не найден")
+        
+        # Проверяем доступ к отделу: админ или пользователь из этого отдела
+        if not (is_admin(current_user) or current_user.department_id == department_id):
+            raise HTTPException(status_code=403, detail="Нет доступа к отделу")
         
         # Выполняем RAG запрос для получения источников
         result = await yandex_rag_service.query_rag(department_id, query)

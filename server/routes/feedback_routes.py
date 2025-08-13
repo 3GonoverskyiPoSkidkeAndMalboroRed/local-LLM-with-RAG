@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, status
 import os
 from sqlalchemy.orm import Session
 from database import get_db
@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, Response
 from typing import List, Optional
 import base64
 from io import BytesIO
+from routes.user_routes import require_admin
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
@@ -55,14 +56,14 @@ async def create_feedback(
         raise HTTPException(status_code=500, detail=f"Ошибка при создании сообщения: {str(e)}")
 
 @router.get("/list")
-async def get_feedback_list(db: Session = Depends(get_db)):
+async def get_feedback_list(
+    db: Session = Depends(get_db),
+    current_user = Depends(require_admin),
+):
     """
     Получает список всех сообщений обратной связи (доступно только для администраторов)
     """
     try:
-        # В реальном приложении здесь должна быть проверка прав администратора
-        # if not current_user.is_admin:
-        #     raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         # Получаем все сообщения обратной связи
         feedback_list = db.query(Feedback).order_by(Feedback.created_at.desc()).all()
@@ -93,7 +94,11 @@ async def get_feedback_list(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении списка сообщений: {str(e)}")
 
 @router.get("/photo/{feedback_id}")
-async def get_feedback_photo(feedback_id: int, db: Session = Depends(get_db)):
+async def get_feedback_photo(
+    feedback_id: int, 
+    db: Session = Depends(get_db),
+    current_user = Depends(require_admin),
+):
     """
     Получает фото для сообщения обратной связи по его ID
     """
@@ -120,14 +125,15 @@ async def get_feedback_photo(feedback_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении фото: {str(e)}")
 
 @router.get("/detail/{feedback_id}")
-async def get_feedback_detail(feedback_id: int, db: Session = Depends(get_db)):
+async def get_feedback_detail(
+    feedback_id: int, 
+    db: Session = Depends(get_db),
+    current_user = Depends(require_admin),
+):
     """
     Получает детальную информацию о сообщении обратной связи по его ID
     """
     try:
-        # В реальном приложении здесь должна быть проверка прав администратора
-        # if not current_user.is_admin:
-        #     raise HTTPException(status_code=403, detail="Доступ запрещен")
         
         # Находим сообщение по ID
         feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()

@@ -401,11 +401,21 @@ async def get_content_by_access_and_department(
     
     
 @router.get("/content/{content_id}")
-async def get_content_by_id(content_id: int, db: Session = Depends(get_db)):
+async def get_content_by_id(
+    content_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         content = db.query(Content).filter(Content.id == content_id).first()
         if content is None:
             raise HTTPException(status_code=404, detail="Контент не найден")
+        
+        # Проверяем права доступа: админ или пользователь имеет доступ к контенту
+        if not (is_admin(current_user) or (
+            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для доступа к контенту")
         
         return {
             "id": content.id,
@@ -458,7 +468,10 @@ async def delete_content(
 
 
 @router.get("/all")
-async def get_all_content(db: Session = Depends(get_db)):
+async def get_all_content(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         contents = db.query(Content).all()
         return [
