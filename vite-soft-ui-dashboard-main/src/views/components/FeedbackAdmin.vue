@@ -73,7 +73,7 @@
               <td class="align-middle">
                 <button 
                   @click="viewFeedbackDetails(feedback.id)" 
-                  class="btn btn-link text-secondary mb-0"
+                  class="btn btn-link text-white mb-0"
                 >
                   <i class="fas fa-eye text-xs"></i>
                 </button>

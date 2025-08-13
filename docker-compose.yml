@@ -12,9 +12,24 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-db}
     volumes:  
       - db_data:/var/lib/mysql
-      - ./backup4.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./backup/backup_file.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-123123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,13 +45,16 @@ services:
     environment:
       - DATABASE_URL=mysql+mysqlconnector://root:${MYSQL_ROOT_PASSWORD:-123123}@db:3306/${MYSQL_DATABASE:-db}
       - DEBUG=${DEBUG:-False}
-      - OLLAMA_HOST=http://ollama:11434
+      # - OLLAMA_HOST=http://ollama:11434
       - API_URL=http://backend:8000
       - EXTERNAL_URL=http://nginx:80
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
-    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "3", "--limit-concurrency", "10", "--backlog", "100"]
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "10", "--backlog", "100"]
     networks:
       - app-network
     volumes:
@@ -83,48 +101,14 @@ services:
     networks:
       - app-network
 
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    environment:
-      # КОНСЕРВАТИВНЫЕ настройки для стабильности
-      - OLLAMA_NUM_PARALLEL=1  # Только 1 параллельный запрос
-      - OLLAMA_MAX_LOADED_MODELS=1  # Только 1 модель в памяти
-      - OLLAMA_FLASH_ATTENTION=false  # Отключаем для стабильности
-      - OLLAMA_KV_CACHE_TYPE=q4_0  # Экономия VRAM
-      - OLLAMA_MAX_QUEUE=5  # Уменьшаем очередь
-      - CUDA_VISIBLE_DEVICES=0
-      - OLLAMA_SCHEDULE_TIMEOUT=120s  # Увеличиваем таймаут
-      - OLLAMA_KEEP_ALIVE=5m  # Держим модель в памяти 5 минут
-      - OLLAMA_GPU_LAYERS=35  # Ограничиваем GPU слои
-    deploy:
-      resources:
-        limits:
-          memory: 8G  # Ограничиваем память
-        reservations:
-          memory: 4G
-          devices:
-            - driver: nvidia
-              count: 1  # Только 1 GPU
-              capabilities: [gpu]
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - app-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+
 
 
 
 volumes:
   db_data:
   files_storage:
-  ollama_data:
+  redis_data:
 
 networks:
   app-network:

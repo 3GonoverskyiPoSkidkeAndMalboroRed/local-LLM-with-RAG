@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request, status
 import os
 from sqlalchemy.orm import Session
 from database import get_db
 from models_db import Access, Content, User, Tag
+from routes.user_routes import get_current_user, require_admin, is_admin
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from typing import List
@@ -10,10 +11,20 @@ import re
 import requests
 import shutil
 
+# Rate limiting import
+from rate_limiter import get_limiter
+
 router = APIRouter(prefix="/content", tags=["content"])
 
+# Получаем глобальный rate limiter
+limiter = get_limiter()
+
 @router.get("/document-viewer/{content_id}")
-async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db)):
+async def get_document_viewer_page(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Возвращает HTML страницу для просмотра документа через Google Docs Viewer
     """
@@ -23,6 +34,12 @@ async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db
         if not content:
             raise HTTPException(status_code=404, detail="Документ не найден")
         
+        # Проверяем доступ пользователя к документу
+        if not (is_admin(current_user) or (
+            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра документа")
+
         # Получаем расширение файла
         file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
         
@@ -180,7 +197,9 @@ async def get_document_viewer_page(content_id: int, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы просмотра: {str(e)}")
 
 @router.post("/upload-content")
+@limiter.limit("20/minute")
 async def upload_content(
+    request: Request,
     title: str,
     description: str,
     access_id: int,
@@ -188,8 +207,17 @@ async def upload_content(
     file: UploadFile = File(...),
     tag_id: int = None,
     user_id: int = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Проверки прав: user_id (если передан) должен совпадать с текущим пользователем, иначе только админ
+    if user_id is not None and user_id != current_user.id and not is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки от имени другого пользователя")
+
+    # Админ может грузить в любой отдел; не-админ только в свой отдел
+    if not is_admin(current_user) and department_id != current_user.department_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки в другой отдел")
+
     # Создаем базовую директорию /app/files/, если она не существует
     os.makedirs("/app/files/", exist_ok=True)
     
@@ -230,12 +258,18 @@ async def upload_content(
     return {"message": f"Контент успешно загружен в {file_location}"}
 
 @router.post("/upload-files")
+@limiter.limit("10/minute")
 async def upload_files(
+    request: Request,
     files: List[UploadFile] = File(...),
     access_level: int = 1,
     department_id: int = 1,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Проверки прав на массовую загрузку
+    if not is_admin(current_user) and department_id != current_user.department_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки в другой отдел")
     # Базовая директория для всех файлов
     base_dir = "/app/files"
     print(f"DEBUG: Создаем базовую директорию: {base_dir}")
@@ -300,7 +334,8 @@ class ContentUpdate(BaseModel):
 async def update_content(
     content_id: int,
     content_data: ContentUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     # Отладочный вывод входных параметров
     print(f"Получены параметры: content_id={content_id}, data={content_data}")
@@ -345,8 +380,14 @@ async def get_content_by_access_and_department(
     access_level: int,
     department_id: int,
     tag_id: int = None,  # Новый параметр для фильтрации по тегу
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Ограничиваем доступ: пользователь должен соответствовать запрошенным access/department или быть админом
+    if not (is_admin(current_user) or (
+        current_user.access_id == access_level and current_user.department_id == department_id
+    )):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
     try:
         query = db.query(Content).filter(
             Content.access_level == access_level,
@@ -377,11 +418,20 @@ async def get_content_by_access_and_department(
     
     
 @router.get("/content/{content_id}")
-async def get_content_by_id(content_id: int, db: Session = Depends(get_db)):
+async def get_content_by_id(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         content = db.query(Content).filter(Content.id == content_id).first()
         if content is None:
             raise HTTPException(status_code=404, detail="Контент не найден")
+        # Проверяем права доступа
+        if not (is_admin(current_user) or (
+            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
         
         return {
             "id": content.id,
@@ -392,17 +442,29 @@ async def get_content_by_id(content_id: int, db: Session = Depends(get_db)):
             "department_id": content.department_id,
             "tag_id": content.tag_id
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении контента: {str(e)}")
 
 @router.delete("/content/{content_id}")
-async def delete_content(content_id: int, db: Session = Depends(get_db)):
+async def delete_content(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         # Получаем контент по ID
         content = db.query(Content).filter(Content.id == content_id).first()
         if not content:
             raise HTTPException(status_code=404, detail="Контент не найден")
         
+        # Проверяем права: админ или владеет по департаменту/уровню
+        if not (is_admin(current_user) or (
+            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для удаления контента")
+
         # Сохраняем путь к файлу
         file_path = content.file_path
         
@@ -424,7 +486,10 @@ async def delete_content(content_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/all")
-async def get_all_content(db: Session = Depends(get_db)):
+async def get_all_content(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         contents = db.query(Content).all()
         return [
@@ -443,11 +508,21 @@ async def get_all_content(db: Session = Depends(get_db)):
     
     
 @router.get("/download-file/{content_id}")
-async def download_file(content_id: int, db: Session = Depends(get_db)):
+async def download_file(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     # Получаем контент из базы данных по ID
     content = db.query(Content).filter(Content.id == content_id).first()
     if content is None:
         raise HTTPException(status_code=404, detail="Контент не найден")
+
+    # Проверяем права доступа текущего пользователя
+    if not (is_admin(current_user) or (
+        current_user.access_id == content.access_level and current_user.department_id == content.department_id
+    )):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для скачивания файла")
 
     # Проверяем, существует ли файл
     file_path = content.file_path
@@ -469,7 +544,15 @@ async def download_file(content_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/user/{user_id}/content/by-tags/{tag_id}")
-async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Session = Depends(get_db)):
+async def get_user_content_by_tags_and_tag_id(
+    user_id: int,
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Доступ: только сам пользователь или администратор
+    if not (is_admin(current_user) or current_user.id == user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
     try:
         # Получаем пользователя по user_id
         user = db.query(User).filter(User.id == user_id).first()
@@ -502,8 +585,12 @@ async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Ses
 async def search_documents(
     user_id: int,
     search_query: str = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Доступ: только сам пользователь или администратор
+    if not (is_admin(current_user) or current_user.id == user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
     try:
         # Получаем пользователя по user_id для проверки прав доступа
         user = db.query(User).filter(User.id == user_id).first()
@@ -548,7 +635,11 @@ async def search_documents(
         raise HTTPException(status_code=500, detail=f"Ошибка при поиске документов: {str(e)}")
 
 @router.post("/create-tag")
-async def create_tag(tag_name: str, db: Session = Depends(get_db)):
+async def create_tag(
+    tag_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         new_tag = Tag(tag_name=tag_name)
         db.add(new_tag)
@@ -559,7 +650,12 @@ async def create_tag(tag_name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при создании тега: {str(e)}")
 
 @router.put("/update-tag/{tag_id}")
-async def update_tag(tag_id: int, tag_name: str, db: Session = Depends(get_db)):
+async def update_tag(
+    tag_id: int,
+    tag_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         tag = db.query(Tag).filter(Tag.id == tag_id).first()
         if tag is None:
@@ -572,7 +668,11 @@ async def update_tag(tag_id: int, tag_name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при обновлении тега: {str(e)}")
 
 @router.delete("/delete-tag/{tag_id}")
-async def delete_tag(tag_id: int, db: Session = Depends(get_db)):
+async def delete_tag(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     """
     Удаляет тег по ID.
     """
@@ -588,7 +688,10 @@ async def delete_tag(tag_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при удалении тега: {str(e)}")
 
 @router.get("/list-files/{department_id}")
-async def list_department_files(department_id: int):
+async def list_department_files(
+    department_id: int,
+    current_user: User = Depends(require_admin),
+):
     """
     Возвращает список файлов в директории отдела.
     """
@@ -611,10 +714,20 @@ async def list_department_files(department_id: int):
             file_path = os.path.join(department_path, filename)
             if os.path.isfile(file_path):
                 file_size = os.path.getsize(file_path)
+                # Форматируем размер файла
+                if file_size < 1024:
+                    size_formatted = f"{file_size} Б"
+                elif file_size < 1024 * 1024:
+                    size_formatted = f"{file_size / 1024:.1f} КБ"
+                elif file_size < 1024 * 1024 * 1024:
+                    size_formatted = f"{file_size / (1024 * 1024):.1f} МБ"
+                else:
+                    size_formatted = f"{file_size / (1024 * 1024 * 1024):.1f} ГБ"
+                
                 files.append({
                     "name": filename,
                     "size": file_size,
-                    "size_formatted": f"{file_size} bytes"
+                    "size_formatted": size_formatted
                 })
         
         return {
@@ -629,8 +742,114 @@ async def list_department_files(department_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении списка файлов: {str(e)}")
 
+@router.delete("/delete-file/{department_id}/{filename}")
+async def delete_department_file(
+    department_id: int,
+    filename: str,
+    current_user: User = Depends(require_admin),
+):
+    """
+    Удаляет конкретный файл из директории отдела.
+    """
+    try:
+        # Формируем путь к файлу
+        department_path = f"/app/files/ContentForDepartment/{department_id}"
+        file_path = os.path.join(department_path, filename)
+        
+        # Проверяем, существует ли директория
+        if not os.path.exists(department_path):
+            raise HTTPException(status_code=404, detail=f"Директория для отдела {department_id} не существует")
+        
+        # Проверяем, существует ли файл
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"Файл {filename} не найден в директории отдела {department_id}")
+        
+        # Удаляем файл
+        os.remove(file_path)
+        
+        # Также удаляем запись из базы данных, если она существует
+        from database import get_db
+        from sqlalchemy.orm import Session
+        db = next(get_db())
+        try:
+            content = db.query(Content).filter(
+                Content.department_id == department_id,
+                Content.file_path.like(f"%{filename}")
+            ).first()
+            
+            if content:
+                db.delete(content)
+                db.commit()
+        except Exception as db_error:
+            print(f"Ошибка при удалении записи из БД: {db_error}")
+        finally:
+            db.close()
+        
+        return {"message": f"Файл {filename} успешно удален из директории отдела {department_id}"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении файла: {str(e)}")
+
+@router.delete("/delete-all-files/{department_id}")
+async def delete_all_department_files(
+    department_id: int,
+    current_user: User = Depends(require_admin),
+):
+    """
+    Удаляет все файлы из директории отдела.
+    """
+    try:
+        # Формируем путь к директории отдела
+        department_path = f"/app/files/ContentForDepartment/{department_id}"
+        
+        # Проверяем, существует ли директория
+        if not os.path.exists(department_path):
+            raise HTTPException(status_code=404, detail=f"Директория для отдела {department_id} не существует")
+        
+        # Получаем список файлов
+        files_to_delete = []
+        for filename in os.listdir(department_path):
+            file_path = os.path.join(department_path, filename)
+            if os.path.isfile(file_path):
+                files_to_delete.append((filename, file_path))
+        
+        if not files_to_delete:
+            return {"message": f"В директории отдела {department_id} нет файлов для удаления"}
+        
+        # Удаляем все файлы
+        deleted_count = 0
+        for filename, file_path in files_to_delete:
+            try:
+                os.remove(file_path)
+                deleted_count += 1
+            except Exception as e:
+                print(f"Ошибка при удалении файла {filename}: {e}")
+        
+        # Также удаляем записи из базы данных
+        from database import get_db
+        from sqlalchemy.orm import Session
+        db = next(get_db())
+        try:
+            contents = db.query(Content).filter(Content.department_id == department_id).all()
+            for content in contents:
+                db.delete(content)
+            db.commit()
+        except Exception as db_error:
+            print(f"Ошибка при удалении записей из БД: {db_error}")
+        finally:
+            db.close()
+        
+        return {"message": f"Удалено {deleted_count} файлов из директории отдела {department_id}"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении файлов: {str(e)}")
+
 @router.get("/list-all-departments")
-async def list_all_departments():
+async def list_all_departments(current_user: User = Depends(require_admin)):
     """
     Возвращает список всех отделов с файлами.
     """

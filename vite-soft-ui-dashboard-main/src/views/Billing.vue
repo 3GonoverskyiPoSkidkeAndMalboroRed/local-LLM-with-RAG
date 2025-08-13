@@ -39,9 +39,10 @@
                     <div v-html="formatMessage(message.content)"></div>
                     
                     <!-- Отображение источников для ответов ассистента в режиме RAG -->
-                    <div v-if="message.role === 'assistant' && message.sources && message.sources.length > 0 && chatMode === 'rag'" class="mt-3">
+                    <div v-if="message.role === 'assistant' && message.sources && message.sources.length > 0 && chatMode === 'rag' && !message.no_sources_found && !isNoSourcesResponse(message.content)" class="mt-3">
                       <SourceDisplay 
                         :sources="message.sources"
+                        :userQuery="message.userQuery || ''"
                         @show-notification="showNotification"
                         @open-source-modal="openSourceModal"
                       />
@@ -89,6 +90,7 @@
     <!-- Модальное окно для детальной информации об источнике -->
     <SourceModal 
       :source="selectedSourceForModal"
+      :isMainSource="selectedSourceIsMain"
       @show-notification="showNotification"
     />
   </div>
@@ -114,7 +116,8 @@ export default {
       requestInProgress: false, // Флаг для отслеживания текущего запроса
       requestTimeout: null, // Таймер для отмены запроса
       lastRequestTime: 0, // Время последнего запроса
-      selectedSourceForModal: null // Выбранный источник для модального окна
+      selectedSourceForModal: null, // Выбранный источник для модального окна
+      selectedSourceIsMain: false // Флаг, указывающий, является ли выбранный источник основным
     };
   },
   methods: {
@@ -122,6 +125,21 @@ export default {
       if (!text) return '';
       // Заменяем \n на <br> для сохранения переносов строк
       return text.replace(/\n/g, '<br>');
+    },
+    
+    isNoSourcesResponse(content) {
+      // Проверяем, является ли ответ сообщением о том, что источники не найдены
+      const noSourcesKeywords = [
+        'не найдено релевантной информации',
+        'не найдено информации',
+        'информация не найдена',
+        'источники не найдены',
+        'документы не найдены'
+      ];
+      
+      return noSourcesKeywords.some(keyword => 
+        content.toLowerCase().includes(keyword.toLowerCase())
+      );
     },
     
     showNotification(notification) {
@@ -157,8 +175,9 @@ export default {
       }
     },
     
-    openSourceModal(source) {
+    openSourceModal(source, isMainSource = false) {
       this.selectedSourceForModal = source;
+      this.selectedSourceIsMain = isMainSource;
       
       // Проверяем, что Bootstrap доступен
       if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
@@ -246,7 +265,8 @@ export default {
           this.requestInProgress = false;
           this.chatMessages.push({
             role: 'assistant',
-            content: '⏱️ Обработка запроса занимает больше времени, чем ожидалось. Запрос продолжает обрабатываться на сервере, ответ может прийти позже.'
+            content: '⏱️ Обработка запроса занимает больше времени, чем ожидалось. Запрос продолжает обрабатываться на сервере, ответ может прийти позже.',
+            userQuery: message
           });
         }
       }, 120000);
@@ -255,91 +275,62 @@ export default {
         let response;
         
         if (this.chatMode === "rag") {
-          // Создаем задачу для обработки в режиме с RAG (новый асинхронный API)
-          const taskResponse = await axios.post(`${import.meta.env.VITE_API_URL}/llm/query`, { 
-            question: message,
-            department_id: departmentId
+          // Проверяем статус RAG системы перед отправкой запроса
+          try {
+            const statusResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/yandex-rag/status/${departmentId}`);
+            const ragStatus = statusResponse.data;
+            
+            if (!ragStatus.is_initialized) {
+              this.chatMessages.push({
+                role: 'assistant',
+                content: `⚠️ RAG система для отдела "${ragStatus.department_name}" не инициализирована. Пожалуйста, сначала инициализируйте RAG систему в разделе "Инициализация RAG".`,
+                userQuery: message
+              });
+              return;
+            }
+            
+            if (ragStatus.documents_in_db === 0) {
+              this.chatMessages.push({
+                role: 'assistant',
+                content: `⚠️ В отделе "${ragStatus.department_name}" нет документов для поиска. Пожалуйста, добавьте документы в базу знаний.`,
+                userQuery: message
+              });
+              return;
+            }
+          } catch (statusError) {
+            console.error("Ошибка при проверке статуса RAG:", statusError);
+            this.chatMessages.push({
+              role: 'assistant',
+              content: '⚠️ Не удалось проверить статус RAG системы. Попробуйте позже.',
+              userQuery: message
+            });
+            return;
+          }
+          
+          // Используем новый эндпоинт Yandex RAG
+          response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-rag/query`, { 
+            department_id: parseInt(departmentId),
+            question: message
           }, {
             noRetry: true
           });
           
-          const taskId = taskResponse.data.task_id;
-          console.log(`Создана задача: ${taskId}`);
-          
-          // Добавляем временное сообщение о статусе
-          const processingMessageIndex = this.chatMessages.length;
+          // Добавляем ответ в чат
           this.chatMessages.push({
             role: 'assistant',
-            content: '🔄 Обрабатываю ваш запрос...',
-            isProcessing: true
+            content: response.data.answer || 'Ответ получен, но содержимое пустое.',
+            sources: response.data.sources || [],
+            no_sources_found: response.data.no_sources_found || false,
+            userQuery: message // Сохраняем запрос пользователя
           });
           
-          // Опрашиваем статус задачи до завершения
-          let maxAttempts = 60; // Максимум 60 попыток (2 минуты)
-          let attempts = 0;
-          
-          while (attempts < maxAttempts) {
-            attempts++;
-            
-            try {
-              const resultResponse = await axios.get(`${import.meta.env.VITE_API_URL}/llm/query/${taskId}`);
-              const taskResult = resultResponse.data;
-              
-              if (taskResult.status === 'completed') {
-                // Задача завершена успешно
-                this.chatMessages[processingMessageIndex] = {
-                  role: 'assistant',
-                  content: taskResult.answer || 'Ответ получен, но содержимое пустое.',
-                  sources: taskResult.sources || [],
-                  isProcessing: false
-                };
-                break;
-              } else if (taskResult.status === 'failed') {
-                // Задача завершена с ошибкой
-                this.chatMessages[processingMessageIndex] = {
-                  role: 'assistant',
-                  content: `❌ Произошла ошибка при обработке: ${taskResult.error || 'Неизвестная ошибка'}`,
-                  isProcessing: false
-                };
-                break;
-              } else if (taskResult.status === 'processing') {
-                // Задача в обработке, обновляем сообщение
-                this.chatMessages[processingMessageIndex].content = '⚙️ Запрос обрабатывается, пожалуйста подождите...';
-              }
-              
-              // Ждем 2 секунды перед следующей попыткой
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              
-            } catch (pollError) {
-              console.error("Ошибка при опросе статуса задачи:", pollError);
-              
-              // Если опрос статуса не удался несколько раз подряд
-              if (attempts >= 3) {
-                this.chatMessages[processingMessageIndex] = {
-                  role: 'assistant',
-                  content: `❌ Не удалось получить результат обработки. Попробуйте еще раз.`,
-                  isProcessing: false
-                };
-                break;
-              }
-              
-              await new Promise(resolve => setTimeout(resolve, 2000));
-            }
-          }
-          
-          // Если превышено максимальное количество попыток
-          if (attempts >= maxAttempts) {
-            this.chatMessages[processingMessageIndex] = {
-              role: 'assistant',
-              content: '⏱️ Обработка запроса занимает больше времени, чем ожидалось. Попробуйте позже.',
-              isProcessing: false
-            };
-          }
         } else {
-          // Используем эндпоинт /generate для простого чата
-          response = await axios.post(`${import.meta.env.VITE_API_URL}/llm/generate`, {
-            messages: message,
-            department_id: departmentId // Добавляем department_id в запрос
+          // Используем эндпоинт Yandex AI для простого чата
+          response = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-ai/generate`, {
+            prompt: message,
+            model: "yandexgpt-lite",
+            max_tokens: 1000,
+            temperature: 0.6
           }, {
             // Отключаем автоматические повторные попытки для запросов к LLM
             noRetry: true
@@ -354,10 +345,28 @@ export default {
       } catch (error) {
         console.error("Ошибка при отправке сообщения:", error);
         
+        // Определяем сообщение об ошибке в зависимости от режима чата
+        let errorMessage = 'Неизвестная ошибка';
+        
+        if (this.chatMode === 'rag') {
+          // Для Yandex RAG проверяем специфичные поля ошибки
+          errorMessage = error.response?.data?.error || 
+                        error.response?.data?.detail || 
+                        error.message || 
+                        'Ошибка при обращении к Yandex RAG';
+        } else {
+          // Для простого чата с Yandex AI
+          errorMessage = error.response?.data?.error || 
+                        error.response?.data?.detail || 
+                        error.message || 
+                        'Ошибка при обращении к Yandex AI';
+        }
+        
         // Добавляем сообщение об ошибке в чат
         this.chatMessages.push({
           role: 'assistant',
-          content: `Произошла ошибка: ${error.response?.data?.detail || error.message || 'Неизвестная ошибка'}`
+          content: `❌ Произошла ошибка: ${errorMessage}`,
+          userQuery: message // Сохраняем запрос пользователя
         });
       } finally {
         // Очищаем таймаут

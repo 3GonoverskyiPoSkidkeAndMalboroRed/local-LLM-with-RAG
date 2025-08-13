@@ -1,11 +1,12 @@
-from langchain_ollama import ChatOllama, OllamaEmbeddings
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, APIRouter
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, APIRouter, status
 from pydantic import BaseModel
 import uvicorn
 import os
+from dotenv import load_dotenv
 
-# Получение URL для Ollama из переменной окружения или использование значения по умолчанию
-OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+# Загружаем переменные окружения из .env файла
+load_dotenv()
+
 from sqlalchemy import create_engine, text, inspect, or_
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
@@ -13,6 +14,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import secrets
 from typing import List
 from fastapi.responses import FileResponse
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+# Rate limiting imports
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from rate_limiter import get_limiter
 
 from models_db import User, Department, Access, Content, Tag
 from document_loader import load_documents_into_database, vec_search
@@ -20,22 +29,30 @@ import argparse
 import sys
 from database import get_db
 
-from llm import getChatChain
-# Импортируем централизованный менеджер состояния ПЕРЕД роутерами
-from llm_state_manager import get_llm_state_manager
-
-# Получаем единственный экземпляр менеджера
-llm_state_manager = get_llm_state_manager()
-
 from quiz import router as quiz_router
 from routes.directory_routes import router as directory_router  # Импортируйте ваш маршрутизатор
-from routes.llm_routes import router as llm_router  # Импортируйте ваш маршрутизатор
+
 from routes.content_routes import router as content_router
 from routes.user_routes import router as user_router
 from routes.feedback_routes import router as feedback_router
+from yandex_cloud_config import yandex_cloud_config
+from routes.yandex_ai_routes import router as yandex_ai_router
+from routes.yandex_rag_routes import router as yandex_rag_router
+
+# Выполняем миграцию при запуске
+try:
+    from migrations.create_rag_tables import run_migration
+    run_migration()
+except Exception as e:
+    print(f"⚠️  Ошибка при выполнении миграции RAG таблиц: {e}")
 
 # Инициализация глобальных переменных
 app = FastAPI()
+
+# Инициализация rate limiter
+limiter = get_limiter()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,33 +62,70 @@ app.add_middleware(
     allow_headers=["*"],  # Разрешить все заголовки
 )
 
+# Глобальный rate limiting middleware
+# Глобальный rate limiting middleware убран - используем только декораторы на эндпоинтах
+
 # Добавляем маршрутизатор для тестов и анкет
 app.include_router(quiz_router)
 app.include_router(directory_router)
-app.include_router(llm_router)  # Добавьте маршрутизатор для LL
+
 app.include_router(content_router)
 app.include_router(user_router)
 app.include_router(feedback_router)
+app.include_router(yandex_ai_router)
+app.include_router(yandex_rag_router)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Настройки подключения к базе данных
-DATABASE_URL = "mysql+mysqlconnector://root:123123@localhost:3306/db_test"
+DATABASE_URL = os.environ.get("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3306/db_test")
 
 # Создание движка и сессии
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Добавляем новый класс для запросов на генерацию без RAG
-class GenerateRequest(BaseModel):
-    messages: str
-    model: str = "ilyagusev/saiga_llama3:latest"
+# class GenerateRequest(BaseModel):
+#     messages: str
+#     model: str = "ilyagusev/saiga_llama3:latest"
 
-class GenerateResponse(BaseModel):
-    text: str
-    model: str = "ilyagusev/saiga_llama3:latest"
+# class GenerateResponse(BaseModel):
+#     text: str
+#     model: str = "ilyagusev/saiga_llama3:latest"
 
 # Функции моделей теперь в LLMStateManager
+
+@app.get("/rate-limit-status")
+async def get_rate_limit_status(request: Request):
+    """
+    Получить текущий статус rate limiting для IP адреса
+    """
+    try:
+        client_ip = get_remote_address(request)
+        
+        # Получаем информацию о текущих лимитах
+        rate_limit_info = {
+            "client_ip": client_ip,
+            "global_limit": "100/minute",
+            "endpoint_limits": {
+                "login": "10/minute",
+                "register": "5/minute", 
+                "upload_content": "20/minute",
+                "upload_files": "10/minute",
+                "feedback_create": "30/minute",
+                "yandex_ai_generate": "60/minute",
+                "yandex_rag_query": "30/minute"
+            },
+            "message": "Rate limiting активен"
+        }
+        
+        return rate_limit_info
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Ошибка при получении статуса rate limiting: {str(e)}"}
+        )
 
 # Эндпоинт для парсинга аргументов
 @app.get("/parse-args")
@@ -98,25 +152,23 @@ async def check_db_connection():
     finally:
         db.close()
 
-def initialize_llm(llm_model_name: str, embedding_model_name: str, documents_path: str, department_id: str, reload: bool = False) -> bool:
-    """Делегируем инициализацию централизованному менеджеру состояния"""
-    return llm_state_manager.initialize_llm(llm_model_name, embedding_model_name, documents_path, department_id, reload)
-
-def main(llm_model_name: str, embedding_model_name: str, documents_path: str, department_id: str = "default", web_mode: bool = False, port: int = 8000) -> None:
+def main(web_mode: bool = False, port: int = 8000) -> None:
     print("Запуск функции main...")  # Отладочное сообщение
     print(f"Инициализация с параметрами:")  # Отладочное сообщение
-    print(f"  Модель: {llm_model_name}")  # Отладочное сообщение
-    print(f"  Модель встраивания: {embedding_model_name}")  # Отладочное сообщение
-    print(f"  Путь к документам: {documents_path}")  # Отладочное сообщение
-    print(f"  Отдел: {department_id}")  # Отладочное сообщение
     print(f"  Режим веб-сервера: {'включен' if web_mode else 'выключен'}")  # Отладочное сообщение
     print(f"  Порт: {port}")  # Отладочное сообщение
 
-    success = initialize_llm(llm_model_name, embedding_model_name, documents_path, department_id)
+    # Инициализация Yandex Cloud SDK
+    yandex_cloud_initialized = yandex_cloud_config.initialize(
+        service_account_key_path=os.getenv('YC_SERVICE_ACCOUNT_KEY_PATH'),
+        folder_id=os.getenv('YC_FOLDER_ID'),
+        cloud_id=os.getenv('YC_CLOUD_ID')
+    )
     
-    if not success:
-        print("Не удалось инициализировать LLM. Завершение работы.")
-        sys.exit(1)
+    if yandex_cloud_initialized:
+        print("✅ Yandex Cloud SDK успешно инициализирован")
+    else:
+        print("⚠️  Yandex Cloud SDK не инициализирован. Проверьте переменные окружения.")
     
     if web_mode:
         print(f"Запуск HTTP сервера на порту {port}...")
@@ -124,55 +176,15 @@ def main(llm_model_name: str, embedding_model_name: str, documents_path: str, de
         uvicorn.run(app, host="0.0.0.0", port=port, access_log=True)
         print("Сервер успешно запущен.")  # Отладочное сообщение после запуска сервера
     else:
-        # Консольный режим
-        while True:
-            try:
-                user_input = input(
-                    "\n\nPlease enter your question (or type 'exit' to end): "
-                ).strip()
-                if user_input.lower() == "exit":
-                    break
-                else:
-                    chat_instance = llm_state_manager.get_department_chat(department_id)
-                    if chat_instance:
-                        chat_instance(user_input)
-                    else:
-                        print(f"Чат для отдела {department_id} не инициализирован")
-            
-            except KeyboardInterrupt:
-                break
+        print("Консольный режим больше не поддерживается. Используйте --web для запуска веб-сервера.")
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run local LLM with RAG with Ollama.")
-    parser.add_argument(
-        "-m",
-        "--model",
-        default="mistral",
-        help="The name of the LLM model to use.",
-    )
-    parser.add_argument(
-        "-e",
-        "--embedding_model",
-        default="nomic-embed-text",
-        help="The name of the embedding model to use.",
-    )
-    parser.add_argument(
-        "-p",
-        "--path",
-        default="Research",
-        help="The path to the directory containing documents to load.",
-    )
-    parser.add_argument(
-        "-d",
-        "--department",
-        default="default",
-        help="The department ID to initialize the chat for.",
-    )
+    parser = argparse.ArgumentParser(description="Run RAG system with Yandex Cloud ML SDK.")
     parser.add_argument(
         "-w",
         "--web",
         action="store_true",
-        help="Run in web server mode instead of console mode.",
+        help="Run in web server mode.",
     )
     parser.add_argument(
         "--port",
@@ -195,17 +207,17 @@ async def get_access_levels(db: Session = Depends(get_db)):
     return [{"id": access_level.id, "access_name": access_level.access_name} for access_level in access_levels]
 
 @app.get("/departments")
-async def get_departments(db: Session = Depends(get_db)):
+async def get_departments_list(db: Session = Depends(get_db)):
     departments = db.query(Department).all()
     return [{"id": dept.id, "name": dept.department_name} for dept in departments]
 
 @app.get("/access-levels")
-async def get_access_level(db: Session = Depends(get_db)):
+async def get_access_levels_list(db: Session = Depends(get_db)):
     access_levels = db.query(Access).all()
     return [{"id": access.id, "access_name": access.access_name} for access in access_levels]
 
 @app.get("/tables")
-async def get_tables(db: Session = Depends(get_db)):
+async def get_tables(db: Session = Depends(get_db), current_user: User = Depends(__import__('routes.user_routes', fromlist=['require_admin']).require_admin)):
     try:
         inspector = inspect(db.bind)
         tables = inspector.get_table_names()
@@ -214,7 +226,7 @@ async def get_tables(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении таблиц: {str(e)}")
 
 @app.get("/tables/{table_name}")
-async def get_table_info(table_name: str, db: Session = Depends(get_db)):
+async def get_table_info(table_name: str, db: Session = Depends(get_db), current_user: User = Depends(__import__('routes.user_routes', fromlist=['require_admin']).require_admin)):
     try:
         inspector = inspect(db.bind)
         columns = inspector.get_columns(table_name)
@@ -309,13 +321,7 @@ async def get_user_content_by_tags(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении контента: {str(e)}")
 
 
-@app.get("/initialized-departments")
-async def get_initialized_departments():
-    """
-    Возвращает список отделов, для которых уже инициализированы модели LLM.
-    """
-    departments = llm_state_manager.get_initialized_departments()
-    return {"departments": departments}
+
 
 @app.get("/search-documents")
 async def search_documents(
@@ -393,4 +399,4 @@ async def search_documents(
 
 if __name__ == "__main__":
     args = parse_arguments()
-    main(args.model, args.embedding_model, args.path, args.department, args.web, args.port)
+    main(args.web, args.port)

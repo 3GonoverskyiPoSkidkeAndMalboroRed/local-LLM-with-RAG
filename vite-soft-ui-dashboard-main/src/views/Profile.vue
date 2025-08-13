@@ -72,7 +72,7 @@ import ProjectsCard from "./components/ProjectOverviewCard.vue";
 
 import setNavPills from "@/assets/js/nav-pills.js";
 import setTooltip from "@/assets/js/tooltip.js";
-import axios from "axios";
+import axiosInstance from "@/utils/axiosConfig";
 
 export default {
   name: "ProfileOverview",
@@ -120,9 +120,9 @@ export default {
   methods: {
     async fetchUserData() {
       try {
-        const userId = localStorage.getItem("userId"); // Получаем ID пользователя из localStorage
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/user/user/${userId}`);  // Замените 1 на нужный ID пользователя
-        this.user = response.data;
+        // Получаем данные пользователя по JWT
+        const response = await axiosInstance.get(`/user/me`);
+        this.user = response.data; // содержит login, full_name, department_name, access_name и т.д.
       } catch (error) {
         console.error("Ошибка при получении данных пользователя:", error);
       }

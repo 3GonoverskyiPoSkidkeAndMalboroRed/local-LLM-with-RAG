@@ -10,7 +10,7 @@ Thank you very much to [amscotti](https://github.com/amscotti) whose repository 
 
 
 ## Требования
-- [Ollama](https://ollama.ai/) версия 0.5.7 или выше.
+
 - [Python] версия 3.13 или выше.
 
 
@@ -18,7 +18,7 @@ Thank you very much to [amscotti](https://github.com/amscotti) whose repository 
 1. Клонируемся через------------------>`git clone`
 2. В терминале------------------------>`python -m venv .venv`
 3. Устанавливаем зависимости---------->`pip install requirements.txt`
-4. Устанавливаем модели с помощью----->`ollama pull <Название модели>`
+
 
 
 ## Запуск
@@ -28,7 +28,7 @@ Thank you very much to [amscotti](https://github.com/amscotti) whose repository 
 
 ## Используемые технологии
 - [Langchain](https://github.com/langchain/langchain): Библиотека Python для работы с большими языковыми моделями.
-- [Ollama](https://ollama.ai/): Платформа для запуска больших языковых моделей локально.
+
 - [Chroma](https://docs.trychroma.com/): Векторная база данных для хранения и извлечения встраиваний.
 - [PyPDF](https://pypi.org/project/PyPDF2/): Библиотека Python для чтения и манипуляции PDF файлами.
 - [Streamlit](https://streamlit.io/): Веб-фреймворк для создания интерактивных приложений для проектов в области машинного обучения и науки о данных.

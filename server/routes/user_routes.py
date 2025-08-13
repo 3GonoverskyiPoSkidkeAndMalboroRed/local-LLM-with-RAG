@@ -1,17 +1,95 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, status, Request
+from fastapi.security import OAuth2PasswordBearer
 import secrets
 from passlib.context import CryptContext
-from fastapi.middleware.cors import CORSMiddleware
 import os
+from datetime import datetime, timedelta
+import jwt
 
 from sqlalchemy.orm import Session
 from database import get_db
 from models_db import Access, Content, User, Department
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Rate limiting import
+from rate_limiter import get_limiter
+
+# Загружаем переменные окружения из .env, если запускается локально
+load_dotenv()
 
 router = APIRouter(prefix="/user", tags=["user"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Получаем глобальный rate limiter
+limiter = get_limiter()
+
+# Настройки JWT (жёсткая проверка наличия переменных окружения)
+JWT_SECRET = os.getenv("JWT_SECRET")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
+_JWT_EXPIRE_MINUTES_RAW = os.getenv("JWT_EXPIRE_MINUTES")
+
+if not JWT_SECRET or not JWT_ALGORITHM or _JWT_EXPIRE_MINUTES_RAW is None:
+    raise RuntimeError(
+        "Отсутствуют обязательные переменные окружения JWT: требуется JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES"
+    )
+
+try:
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(_JWT_EXPIRE_MINUTES_RAW)
+except ValueError as e:
+    raise RuntimeError("JWT_EXPIRE_MINUTES должен быть целым числом") from e
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/user/login")
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Не удалось проверить учетные данные",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Срок действия токена истек",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+
+# Админ-помощники
+def is_admin(user: User) -> bool:
+    # Принято считать роль администратора role_id = 1
+    return int(user.role_id or 0) == 1
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if not is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ только для администраторов")
+    return current_user
 
 class UserCreate(BaseModel):
     login: str
@@ -22,28 +100,29 @@ class UserCreate(BaseModel):
     full_name: str = None
 
 @router.post("/register")
-async def register(user: UserCreate, db: Session = Depends(get_db)):
-    # Проверка существования пользователя
-    existing_user = db.query(User).filter(User.login == user.login).first()
+@limiter.limit("5/minute")
+async def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
+    # Проверяем, существует ли пользователь с таким логином
+    existing_user = db.query(User).filter(User.login == user_data.login).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Пользователь уже существует")
+        raise HTTPException(status_code=400, detail="Пользователь с таким логином уже существует")
 
     # Хеширование пароля
-    hashed_password = pwd_context.hash(user.password)
+    hashed_password = pwd_context.hash(user_data.password)
     new_user = User(
-        login=user.login,
+        login=user_data.login,
         password=hashed_password,
-        role_id=user.role_id,
-        department_id=user.department_id,
-        access_id=user.access_id,
-        full_name=user.full_name
+        role_id=user_data.role_id,
+        department_id=user_data.department_id,
+        access_id=user_data.access_id,
+        full_name=user_data.full_name
     )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    return {"message": "Пользователь успешно зарегистрирован"}
+    return {"message": "Пользователь успешно зарегистрирован", "user_id": new_user.id}
 
 class UserLogin(BaseModel):
     login: str
@@ -54,27 +133,56 @@ def generate_auth_key() -> str:
     return secrets.token_hex(16)
 
 @router.post("/login")
-async def login(user_data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.login == user_data.login).first()
     if not user or not user.check_password(user_data.password):
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
     
+    # Генерация JWT токена
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "login": user.login,
+            "role_id": user.role_id,
+            "department_id": user.department_id,
+            "access_id": user.access_id,
+        }
+    )
+
+    # Для обратной совместимости можно оставить auth_key (если используется где-то ещё)
     auth_key = generate_auth_key()
     user.auth_key = auth_key
     db.commit()
-    
+
     return {
-        "id": user.id,
-        "login": user.login,
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "login": user.login,
+            "role_id": user.role_id,
+            "department_id": user.department_id,
+            "access_id": user.access_id,
+            "full_name": user.full_name,
+        },
         "auth_key": auth_key,
+        # Дублируем некоторые поля для обратной совместимости фронтенда
+        "id": user.id,
         "role_id": user.role_id,
         "department_id": user.department_id,
-        "access_id": user.access_id,
     }
 
 
 @router.get("/user/{id}")
-async def get_user(id: int, db: Session = Depends(get_db)):
+async def get_user(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Доступ: только сам пользователь или администратор
+    if not (is_admin(current_user) or current_user.id == id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
     user = db.query(User).filter(User.id == id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -95,8 +203,38 @@ async def get_user(id: int, db: Session = Depends(get_db)):
         "full_name": user.full_name
     }
 
+
+@router.get("/me")
+async def read_current_user(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    department = db.query(Department).filter(Department.id == current_user.department_id).first()
+    department_name = department.department_name if department else "Неизвестный отдел"
+
+    access = db.query(Access).filter(Access.id == current_user.access_id).first()
+    access_name = access.access_name if access else "Неизвестный доступ"
+
+    return {
+        "id": current_user.id,
+        "login": current_user.login,
+        "role_id": current_user.role_id,
+        "department_id": current_user.department_id,
+        "department_name": department_name,
+        "access_id": current_user.access_id,
+        "access_name": access_name,
+        "full_name": current_user.full_name,
+    }
+
 @router.get("/user/{user_id}/content")
-async def get_user_content(user_id: int, db: Session = Depends(get_db)):
+async def get_user_content(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Доступ: только сам пользователь или администратор
+    if not (is_admin(current_user) or current_user.id == user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
     try:
         # Получаем пользователя по user_id
         user = db.query(User).filter(User.id == user_id).first()
@@ -142,7 +280,10 @@ async def get_user_content(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/users")
-async def get_users(db: Session = Depends(get_db)):
+async def get_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         users = db.query(User).all()  # Получаем всех пользователей из базы данных
         user_list = []
@@ -171,7 +312,12 @@ async def get_users(db: Session = Depends(get_db)):
 
 
 @router.put("/user/{user_id}")
-async def update_user(user_id: int, user_data: dict, db: Session = Depends(get_db)):
+async def update_user(
+    user_id: int,
+    user_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         # Получаем пользователя по ID
         user = db.query(User).filter(User.id == user_id).first()
@@ -195,7 +341,11 @@ async def update_user(user_id: int, user_data: dict, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=f"Ошибка при обновлении пользователя: {str(e)}")
 
 @router.delete("/user/{user_id}")
-async def delete_user(user_id: int, db: Session = Depends(get_db)):
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         # Получаем пользователя по ID
         user = db.query(User).filter(User.id == user_id).first()
@@ -212,7 +362,15 @@ async def delete_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при удалении пользователя: {str(e)}")
 
 @router.put("/user/{user_id}/password")
-async def update_password(user_id: int, password_data: dict, db: Session = Depends(get_db)):
+async def update_password(
+    user_id: int,
+    password_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Доступ: владелец аккаунта или администратор
+    if not (is_admin(current_user) or current_user.id == user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ запрещён")
     try:
         # Получаем пользователя по ID
         user = db.query(User).filter(User.id == user_id).first()

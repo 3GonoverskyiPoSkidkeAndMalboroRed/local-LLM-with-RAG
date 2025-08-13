@@ -786,56 +786,16 @@ export default {
       }
     },
     
-    // Получение списка моделей LLM
+    // Получение списка моделей LLM (больше не используется)
     async fetchLLMModels() {
-      try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/llm/models/llm`);
-        if (response.data && response.data.models) {
-          this.llmModels = response.data.models;
-        } else {
-          // Fallback на дефолтные значения, если API не вернул моделей
-          this.llmModels = [
-            'mistral',
-            'llama3',
-            'ilyagusev/saiga_llama3:latest',
-            'gemma'
-          ];
-        }
-      } catch (error) {
-        console.error('Ошибка при получении моделей LLM:', error);
-        // Fallback на дефолтные значения в случае ошибки
-        this.llmModels = [
-          'snowflake-arctic-embed2:latest ',
-          'llama3',
-          'ilyagusev/saiga_llama3',
-          'gemma'
-        ];
-      }
+      console.log('Функция fetchLLMModels больше не используется. Используйте Yandex RAG систему.');
+      this.llmModels = [];
     },
     
-    // Получение списка моделей эмбеддингов
+    // Получение списка моделей эмбеддингов (больше не используется)
     async fetchEmbeddingModels() {
-      try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/llm/models/embedding`);
-        if (response.data && response.data.models) {
-          this.embeddingModels = response.data.models;
-        } else {
-          // Fallback на дефолтные значения, если API не вернул моделей
-          this.embeddingModels = [
-            'snowflake-arctic-embed2:latest ',
-            'mxbai-embed-large',
-            'all-minilm'
-          ];
-        }
-      } catch (error) {
-        console.error('Ошибка при получении моделей эмбеддингов:', error);
-        // Fallback на дефолтные значения в случае ошибки
-        this.embeddingModels = [
-          'snowflake-arctic-embed2:latest',
-          'mxbai-embed-large',
-          'all-minilm'
-        ];
-      }
+      console.log('Функция fetchEmbeddingModels больше не используется. Используйте Yandex RAG систему.');
+      this.embeddingModels = [];
     },
     
     // Получение списка тегов

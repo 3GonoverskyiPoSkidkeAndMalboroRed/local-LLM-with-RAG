@@ -52,7 +52,7 @@
                   <button
                     v-if="isDocumentFormat(getFileExtension(content.file_path))"
                     @click="viewDocument(content)"
-                    class="btn btn-sm btn-outline-primary me-2"
+                    class="btn btn-sm btn-outline-secondary me-2"
                     title="Просмотреть документ"
                   >
                     <i class="fas fa-eye me-1"></i>Просмотр
@@ -90,7 +90,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import axiosInstance from '@/utils/axiosConfig';
 
 export default {
   name: "ContentTable",
@@ -120,14 +120,8 @@ export default {
     // Проверка, является ли пользователь администратором
     async checkIfAdmin() {
       try {
-        const userId = localStorage.getItem("userId");
-        if (!userId) {
-          return;
-        }
-        
-        // Получаем данные о пользователе
-        const userResponse = await axios.get(`${import.meta.env.VITE_API_URL}/user/user/${userId}`);
-        const user = userResponse.data;
+        // Получаем данные о пользователе по JWT
+        const { data: user } = await axiosInstance.get(`/user/me`);
         
         // Проверяем, является ли пользователь администратором (access_id = 3)
         this.isAdmin = user.access_id === 3;
