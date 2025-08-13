@@ -220,8 +220,9 @@ async def get_user_content(user_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="Пользователь не найден")
 
         # Получаем контент из базы данных по access_level и department_id пользователя
+        # Пользователь видит документы с access_level <= user.access_id (более высокий уровень = больше прав)
         contents = db.query(Content).filter(
-            Content.access_level == user.access_id,
+            Content.access_level <= user.access_id,
             Content.department_id == user.department_id
         ).all()
 

@@ -79,7 +79,7 @@
               <div class="col-md-6 mb-3">
                 <label for="edit-department" class="form-label">Отдел</label>
                 <select class="form-select" id="edit-department" v-model="editForm.department_id" required>
-                  <option v-for="department in departments" :key="department.id" :value="department.department_name">
+                  <option v-for="department in departments" :key="department.id" :value="department.id">
                     {{ department.department_name }}
                   </option>
                 </select>
@@ -197,6 +197,7 @@ export default {
       }
       
       const content = this.contentList.find(c => c.id === this.editForm.id);
+      
       if (content) {
         this.editForm = {
           id: content.id,
@@ -220,7 +221,15 @@ export default {
     },
     async editContent() {
       try {
-        const response = await axios.put(`${import.meta.env.VITE_API_URL}/content/${this.editForm.id}`, this.editForm);
+        // Подготавливаем данные для отправки
+        const formData = {
+          ...this.editForm,
+          tag_id: this.editForm.tag_id === '' ? null : this.editForm.tag_id
+        };
+        
+        console.log('Отправляемые данные:', formData);
+        
+        const response = await axios.put(`${import.meta.env.VITE_API_URL}/content/${this.editForm.id}`, formData);
         this.editMessage = 'Контент успешно обновлен';
         this.editStatus = true;
         this.$emit('content-updated');

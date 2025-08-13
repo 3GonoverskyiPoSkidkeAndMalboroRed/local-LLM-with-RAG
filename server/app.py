@@ -163,7 +163,7 @@ async def get_access_levels(db: Session = Depends(get_db)):
 @app.get("/departments")
 async def get_departments_list(db: Session = Depends(get_db)):
     departments = db.query(Department).all()
-    return [{"id": dept.id, "name": dept.department_name} for dept in departments]
+    return [{"id": dept.id, "department_name": dept.department_name} for dept in departments]
 
 @app.get("/access-levels")
 async def get_access_levels_list(db: Session = Depends(get_db)):
@@ -203,20 +203,31 @@ async def get_user_content_by_tags(user_id: int, db: Session = Depends(get_db)):
         # Получаем все теги
         tags = db.query(Tag).all()
         
+
+        
         # Создаем словарь для результата
         result = {
             "tags": [],
             "untagged_content": []
         }
         
+        # Проверяем, является ли пользователь админом
+        is_admin_user = user.role_id == 1
+        
         # Добавляем информацию о тегах и связанном контенте
         for tag in tags:
-            # Получаем контент для данного тега с учетом прав доступа пользователя
-            tag_content = db.query(Content).filter(
-                Content.tag_id == tag.id,
-                Content.access_level == user.access_id,
-                Content.department_id == user.department_id
-            ).all()
+            # Получаем контент для данного тега
+            if is_admin_user:
+                # Для админа - все документы
+                tag_content = db.query(Content).filter(Content.tag_id == tag.id).all()
+            else:
+                # Для обычных пользователей - с учетом прав доступа
+                # Пользователь видит документы с access_level <= user.access_id (более высокий уровень = больше прав)
+                tag_content = db.query(Content).filter(
+                    Content.tag_id == tag.id,
+                    Content.access_level <= user.access_id,
+                    Content.department_id == user.department_id
+                ).all()
             
             # Если есть контент для этого тега, добавляем его в результат
             if tag_content:
@@ -237,11 +248,17 @@ async def get_user_content_by_tags(user_id: int, db: Session = Depends(get_db)):
                 result["tags"].append(tag_info)
         
         # Получаем контент без тега
-        untagged_content = db.query(Content).filter(
-            Content.tag_id == None,
-            Content.access_level == user.access_id,
-            Content.department_id == user.department_id
-        ).all()
+        if is_admin_user:
+            # Для админа - все документы без тега
+            untagged_content = db.query(Content).filter(Content.tag_id.is_(None)).all()
+        else:
+            # Для обычных пользователей - с учетом прав доступа
+            # Пользователь видит документы с access_level <= user.access_id (более высокий уровень = больше прав)
+            untagged_content = db.query(Content).filter(
+                Content.tag_id.is_(None),
+                Content.access_level <= user.access_id,
+                Content.department_id == user.department_id
+            ).all()
         
         # Добавляем контент без тега в результат
         for content in untagged_content:
@@ -258,7 +275,6 @@ async def get_user_content_by_tags(user_id: int, db: Session = Depends(get_db)):
 
 
 
-
 @app.get("/search-documents")
 async def search_documents(
     user_id: int,
@@ -272,8 +288,9 @@ async def search_documents(
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
         # Базовый запрос с учетом прав доступа пользователя
+        # Пользователь видит документы с access_level <= user.access_id (более высокий уровень = больше прав)
         query = db.query(Content).filter(
-            Content.access_level == user.access_id,
+            Content.access_level <= user.access_id,
             Content.department_id == user.department_id
         )
         

@@ -147,9 +147,11 @@ export default {
   data() {
     return {
       userId: localStorage.getItem("userId"),
+      userRole: localStorage.getItem("role_name"),
       tagId: null,
       tagName: '',
       documents: [],
+      allDocuments: [], // Все документы для поиска
       loading: true,
       error: null,
       mediaPlayerModal: null,
@@ -171,6 +173,11 @@ export default {
     // Получаем ID и название тега из параметров маршрута
     this.tagId = this.$route.params.tagId;
     this.tagName = this.$route.params.tagName;
+    
+    // Преобразуем tagId в число, если это не 'untagged'
+    if (this.tagId !== 'untagged') {
+      this.tagId = parseInt(this.tagId);
+    }
     
     await this.fetchTagContent();
   },
@@ -202,17 +209,30 @@ export default {
       try {
         this.loading = true;
         
+        console.log('TagContentPage - tagId:', this.tagId);
+        console.log('TagContentPage - userId:', this.userId);
+        console.log('TagContentPage - userRole:', this.userRole);
+        
         let response;
-        if (this.tagId === 'untagged') {
-          // Получаем документы без тега
-          response = await axiosInstance.get(`/user/${this.userId}/content/untagged`);
-          this.documents = response.data;
+        
+                if (this.tagId === 'untagged') {
+          // Получаем документы без тега через общий эндпоинт
+          console.log('Получаем документы без тега');
+          const allResponse = await axiosInstance.get(`/user/${this.userId}/content/by-tags`);
+          console.log('Ответ для untagged:', allResponse.data);
+          this.allDocuments = allResponse.data.untagged_content;
+          this.documents = [...this.allDocuments];
         } else {
-          // Получаем документы по ID тега с использованием нового эндпоинта
+          // Получаем документы по ID тега
+          console.log('Получаем документы по тегу ID:', this.tagId);
           response = await axiosInstance.get(`/content/user/${this.userId}/content/by-tags/${this.tagId}`);
-          this.documents = response.data;
-          console.log('Получены документы по тегу:', this.documents);
+          console.log('Ответ для тега:', response.data);
+          this.allDocuments = response.data;
+          this.documents = [...this.allDocuments];
         }
+        
+        console.log('Итоговые документы:', this.documents);
+        console.log('Количество документов:', this.documents.length);
         
         this.loading = false;
       } catch (error) {
@@ -223,14 +243,39 @@ export default {
     },
     searchDocuments() {
       if (this.searchQuery.length > 0) {
-        this.documents = this.documents.filter(doc =>
-          doc.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          (doc.description && doc.description.toLowerCase().includes(this.searchQuery.toLowerCase())) ||
-          this.getFileName(doc.file_path).toLowerCase().includes(this.searchQuery.toLowerCase())
-        );
+        // Нормализуем поисковый запрос (заменяем пробелы на подчеркивания и наоборот)
+        const normalizedQuery = this.searchQuery.toLowerCase().replace(/ /g, '_').replace(/_/g, ' ');
+        const originalQuery = this.searchQuery.toLowerCase();
+        
+        // Фильтруем документы с учетом нормализации
+        this.documents = this.allDocuments.filter(doc => {
+          const title = doc.title.toLowerCase();
+          const description = (doc.description || '').toLowerCase();
+          const fileName = this.getFileName(doc.file_path).toLowerCase();
+          
+          // Проверяем оригинальный запрос
+          const matchesOriginal = title.includes(originalQuery) ||
+                                 description.includes(originalQuery) ||
+                                 fileName.includes(originalQuery);
+          
+          // Проверяем нормализованный запрос
+          const matchesNormalized = title.includes(normalizedQuery) ||
+                                   description.includes(normalizedQuery) ||
+                                   fileName.includes(normalizedQuery);
+          
+          // Проверяем с заменой подчеркиваний на пробелы в названии
+          const titleWithSpaces = title.replace(/_/g, ' ');
+          const matchesTitleSpaces = titleWithSpaces.includes(originalQuery);
+          
+          // Проверяем с заменой пробелов на подчеркивания в названии
+          const titleWithUnderscores = title.replace(/ /g, '_');
+          const matchesTitleUnderscores = titleWithUnderscores.includes(originalQuery);
+          
+          return matchesOriginal || matchesNormalized || matchesTitleSpaces || matchesTitleUnderscores;
+        });
       } else {
-        // Если поле поиска пустое, загружаем все документы заново
-        this.fetchTagContent();
+        // Если поле поиска пустое, показываем все документы
+        this.documents = [...this.allDocuments];
       }
     },
     getFileName(filePath) {

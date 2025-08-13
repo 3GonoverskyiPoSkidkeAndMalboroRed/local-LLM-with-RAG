@@ -25,25 +25,28 @@
                 {{ error }}
               </div>
               <div v-else>
-                <div v-if="documents.length > 0">
-                  <h6>Результаты поиска:</h6>
-                  <div v-for="doc in documents" :key="doc.id" class="document-item">
-                    <div class="document-header">
-                      <h6>{{ doc.title }}</h6>
-                      <p>{{ doc.description }}</p>
-                      <div class="document-actions">
-                        <button class="btn btn-sm btn-info" @click="viewDocument(doc)">
-                          <i class="fas fa-eye me-1"></i> Просмотреть
-                        </button>
-                        <button class="btn btn-sm btn-info ms-2" @click="downloadDocument(doc)">
-                          <i class="fas fa-download me-1"></i> Скачать
-                        </button>
+                <!-- Результаты поиска показываются только если есть поисковый запрос -->
+                <div v-if="searchQuery.length > 0">
+                  <div v-if="documents.length > 0">
+                    <h6>Результаты поиска:</h6>
+                    <div v-for="doc in documents" :key="doc.id" class="document-item">
+                      <div class="document-header">
+                        <h6>{{ doc.title }}</h6>
+                        <p>{{ doc.description }}</p>
+                        <div class="document-actions">
+                          <button class="btn btn-sm btn-info" @click="viewDocument(doc)">
+                            <i class="fas fa-eye me-1"></i> Просмотреть
+                          </button>
+                          <button class="btn btn-sm btn-info ms-2" @click="downloadDocument(doc)">
+                            <i class="fas fa-download me-1"></i> Скачать
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-                <div v-else>
-                  <p>Документы не найдены.</p>
+                  <div v-else>
+                    <p>Документы не найдены.</p>
+                  </div>
                 </div>
                 <div class="folder-item">
                   <div class="folder-header" @click="openTagPage('untagged')">
@@ -78,6 +81,7 @@ export default {
   data() {
     return {
       userId: localStorage.getItem("userId"),
+      userRole: localStorage.getItem("role_name"),
       contentData: {
         tags: [],
         untagged_content: []
@@ -99,8 +103,11 @@ export default {
     async fetchContentByTags() {
       try {
         this.loading = true;
+        
+        // Просто используем стандартный эндпоинт для всех пользователей
         const response = await axiosInstance.get(`/user/${this.userId}/content/by-tags`);
         this.contentData = response.data;
+        
         this.loading = false;
       } catch (error) {
         console.error("Ошибка при получении контента:", error);
@@ -111,7 +118,12 @@ export default {
     async searchDocuments() {
       if (this.searchQuery.length > 0) {
         try {
-          const response = await axiosInstance.get(`/content/search-documents?user_id=${this.userId}&search_query=${this.searchQuery}`);
+          const response = await axiosInstance.get('/content/search-documents', {
+            params: {
+              user_id: this.userId,
+              search_query: this.searchQuery
+            }
+          });
           this.documents = response.data.documents;
         } catch (error) {
           console.error("Ошибка при поиске документов:", error);

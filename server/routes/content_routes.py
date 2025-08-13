@@ -6,7 +6,7 @@ from models_db import Access, Content, User, Tag
 from routes.user_routes import get_current_user, require_admin, is_admin
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from typing import List
+from typing import List, Optional
 import re
 import requests
 import shutil
@@ -30,7 +30,7 @@ async def get_document_viewer_page(
         
         # Проверяем доступ пользователя к документу
         if not (is_admin(current_user) or (
-            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+            current_user.access_id >= content.access_level and current_user.department_id == content.department_id
         )):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра документа")
 
@@ -318,7 +318,7 @@ class ContentUpdate(BaseModel):
     description: str = None
     access_id: int = None
     department_id: int = None
-    tag_id: int = None
+    tag_id: Optional[int] = None
 
 @router.put("/{content_id}")
 async def update_content(
@@ -433,7 +433,7 @@ async def delete_content(
         
         # Проверяем права: админ или владеет по департаменту/уровню
         if not (is_admin(current_user) or (
-            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+            current_user.access_id >= content.access_level and current_user.department_id == content.department_id
         )):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для удаления контента")
 
@@ -458,8 +458,12 @@ async def delete_content(
 
 
 @router.get("/all")
-async def get_all_content(db: Session = Depends(get_db)):
+async def get_all_content(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
+        # Проверяем, что пользователь является админом
+        if not is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Доступ только для администраторов")
+        
         contents = db.query(Content).all()
         return [
             {
@@ -489,7 +493,7 @@ async def download_file(
 
     # Проверяем права доступа текущего пользователя
     if not (is_admin(current_user) or (
-        current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        current_user.access_id >= content.access_level and current_user.department_id == content.department_id
     )):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для скачивания файла")
 
@@ -520,12 +524,21 @@ async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Ses
         if user is None:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-        # Получаем контент для данного тега с учетом прав доступа пользователя
-        tag_content = db.query(Content).filter(
-            Content.tag_id == tag_id,
-            Content.access_level == user.access_id,
-            Content.department_id == user.department_id
-        ).all()
+        # Проверяем, является ли пользователь админом
+        is_admin_user = user.role_id == 1
+
+        # Получаем контент для данного тега
+        if is_admin_user:
+            # Для админа - все документы с данным тегом
+            tag_content = db.query(Content).filter(Content.tag_id == tag_id).all()
+        else:
+            # Для обычных пользователей - с учетом прав доступа
+            # Пользователь видит документы с access_level <= user.access_id (более высокий уровень = больше прав)
+            tag_content = db.query(Content).filter(
+                Content.tag_id == tag_id,
+                Content.access_level <= user.access_id,
+                Content.department_id == user.department_id
+            ).all()
         
         if not tag_content:
             raise HTTPException(status_code=404, detail="Контент не найден")
@@ -554,23 +567,51 @@ async def search_documents(
         if user is None:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
-        # Базовый запрос с учетом прав доступа пользователя
-        query = db.query(Content).filter(
-            Content.access_level == user.access_id,
-            Content.department_id == user.department_id
-        )
+        # Проверяем, является ли пользователь админом
+        is_admin_user = user.role_id == 1
+        
+        # Базовый запрос
+        if is_admin_user:
+            # Для админа - все документы
+            query = db.query(Content)
+        else:
+            # Для обычных пользователей - с учетом прав доступа
+            # Пользователь видит документы с access_level <= user.access_id (более высокий уровень = больше прав)
+            query = db.query(Content).filter(
+                Content.access_level <= user.access_id,
+                Content.department_id == user.department_id
+            )
         
         # Если указан поисковый запрос, добавляем условия поиска
         if search_query:
             from sqlalchemy import or_
-            # Поиск по названию, описанию или пути файла
-            query = query.filter(
-                or_(
-                    Content.title.ilike(f"%{search_query}%"),  # Поиск по названию
-                    Content.description.ilike(f"%{search_query}%"),  # Поиск по описанию
-                    Content.file_path.ilike(f"%{search_query}%")  # Поиск по пути файла (включая имя файла)
-                )
-            )
+            # Нормализуем поисковый запрос (заменяем пробелы на подчеркивания и наоборот)
+            normalized_query = search_query.replace(' ', '_').replace('_', ' ')
+            
+            # Создаем дополнительные варианты поиска
+            search_variants = [
+                search_query,  # Оригинальный запрос
+                normalized_query,  # Нормализованный запрос
+                search_query.replace(' ', '_'),  # С пробелами замененными на подчеркивания
+                search_query.replace('_', ' '),  # С подчеркиваниями замененными на пробелы
+                normalized_query.replace(' ', '_'),  # Нормализованный с пробелами на подчеркивания
+                normalized_query.replace('_', ' ')   # Нормализованный с подчеркиваниями на пробелы
+            ]
+            
+            # Убираем дубликаты
+            search_variants = list(set(search_variants))
+            
+            # Создаем условия поиска для всех вариантов
+            search_conditions = []
+            for variant in search_variants:
+                search_conditions.extend([
+                    Content.title.ilike(f"%{variant}%"),
+                    Content.description.ilike(f"%{variant}%"),
+                    Content.file_path.ilike(f"%{variant}%")
+                ])
+            
+            # Применяем фильтр
+            query = query.filter(or_(*search_conditions))
         
         # Выполняем запрос
         contents = query.all()
