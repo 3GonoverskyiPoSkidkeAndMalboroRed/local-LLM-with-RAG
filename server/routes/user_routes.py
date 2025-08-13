@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, status, Request
 from fastapi.security import OAuth2PasswordBearer
 import secrets
 from passlib.context import CryptContext
 import os
 from datetime import datetime, timedelta
 import jwt
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from sqlalchemy.orm import Session
 from database import get_db
@@ -18,6 +20,9 @@ load_dotenv()
 router = APIRouter(prefix="/user", tags=["user"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # Настройки JWT (жёсткая проверка наличия переменных окружения)
 JWT_SECRET = os.getenv("JWT_SECRET")
@@ -126,7 +131,8 @@ def generate_auth_key() -> str:
     return secrets.token_hex(16)
 
 @router.post("/login")
-async def login(user_data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.login == user_data.login).first()
     if not user or not user.check_password(user_data.password):
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
