@@ -10,6 +10,8 @@ from typing import List
 import re
 import requests
 import shutil
+import mimetypes
+import urllib.parse
 
 router = APIRouter(prefix="/content", tags=["content"])
 
@@ -37,8 +39,8 @@ async def get_document_viewer_page(
         # Получаем расширение файла
         file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
         
-        # Определяем URL для скачивания файла
-        download_url = f"http://localhost:8081/content/download-file/{content_id}"
+        # Определяем URL для скачивания файла - используем относительный путь
+        download_url = f"/content/download-file/{content_id}"
         
         # Поддерживаемые форматы для Google Docs Viewer
         supported_formats = ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf']
@@ -489,6 +491,11 @@ async def get_all_content(
         raise HTTPException(status_code=500, detail=f"Ошибка при получении контента: {str(e)}")
     
     
+def get_mime_type(file_path):
+    """Определяет MIME-тип файла по расширению"""
+    mime_type, _ = mimetypes.guess_type(file_path)
+    return mime_type or 'application/octet-stream'
+
 @router.get("/download-file/{content_id}")
 async def download_file(
     content_id: int,
@@ -520,8 +527,28 @@ async def download_file(
         else:
             raise HTTPException(status_code=404, detail="Файл не найден")
 
-    # Возвращаем файл как ответ
-    return FileResponse(file_path, media_type='application/octet-stream', filename=os.path.basename(file_path))
+    # Определяем MIME-тип файла
+    mime_type = get_mime_type(file_path)
+    
+    # Получаем имя файла и кодируем его для заголовка
+    filename = os.path.basename(file_path)
+    try:
+        # Пытаемся закодировать имя файла в latin-1
+        filename_encoded = filename.encode('latin-1').decode('latin-1')
+    except UnicodeEncodeError:
+        # Если не получается, используем URL-кодирование
+        import urllib.parse
+        filename_encoded = urllib.parse.quote(filename)
+    
+    # Возвращаем файл как ответ с правильным MIME-типом
+    return FileResponse(
+        file_path, 
+        media_type=mime_type, 
+        filename=filename_encoded,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"
+        }
+    )
 
 
 @router.get("/public-download/{content_id}")
@@ -590,8 +617,27 @@ async def public_download_file(
             else:
                 raise HTTPException(status_code=404, detail="Файл не найден")
 
-        # Возвращаем файл как ответ
-        return FileResponse(file_path, media_type='application/octet-stream', filename=os.path.basename(file_path))
+        # Получаем имя файла и кодируем его для заголовка
+        filename = os.path.basename(file_path)
+        try:
+            # Пытаемся закодировать имя файла в latin-1
+            filename_encoded = filename.encode('latin-1').decode('latin-1')
+        except UnicodeEncodeError:
+            # Если не получается, используем URL-кодирование
+            filename_encoded = urllib.parse.quote(filename)
+        
+        # Определяем MIME-тип файла
+        mime_type = get_mime_type(file_path)
+        
+        # Возвращаем файл как ответ с правильным MIME-типом
+        return FileResponse(
+            file_path, 
+            media_type=mime_type, 
+            filename=filename_encoded,
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"
+            }
+        )
         
     except HTTPException:
         raise

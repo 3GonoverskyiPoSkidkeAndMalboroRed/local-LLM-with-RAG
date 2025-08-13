@@ -365,17 +365,33 @@ export default {
     },
     async downloadDocument(doc) {
       try {
-        // Получаем токен для скачивания
-        const tokenResponse = await axiosInstance.get(`/content/download-token/${doc.id}`);
-        const downloadToken = tokenResponse.data.download_token;
+        // Используем axios для скачивания файла с правильной аутентификацией
+        const response = await axiosInstance.get(`/content/download-file/${doc.id}`, {
+          responseType: 'blob' // Важно для скачивания файлов
+        });
         
-        // Скачиваем файл с токеном
-        window.location.href = `${axiosInstance.defaults.baseURL}/content/public-download/${doc.id}?token=${downloadToken}`;
+        // Создаем blob URL для скачивания
+        const blob = new Blob([response.data]);
+        const url = window.URL.createObjectURL(blob);
+        
+        // Создаем временную ссылку для скачивания
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = this.getFileName(doc.file_path);
+        document.body.appendChild(link);
+        link.click();
+        
+        // Очищаем ресурсы
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
       } catch (error) {
         console.error("Ошибка при скачивании документа:", error);
-        // Fallback к старому методу, если новый не работает
+        // Fallback к старому методу с токеном
         try {
-          window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
+          const tokenResponse = await axiosInstance.get(`/content/download-token/${doc.id}`);
+          const downloadToken = tokenResponse.data.download_token;
+          window.location.href = `${axiosInstance.defaults.baseURL}/content/public-download/${doc.id}?token=${downloadToken}`;
         } catch (fallbackError) {
           console.error("Ошибка при fallback скачивании:", fallbackError);
         }

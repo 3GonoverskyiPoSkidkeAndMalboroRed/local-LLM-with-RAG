@@ -57,13 +57,13 @@
                   >
                     <i class="fas fa-eye me-1"></i>Просмотр
                   </button>
-                  <a
-                    :href="getDownloadLink(content.id)"
+                  <button
+                    @click="downloadDocument(content)"
                     class="btn btn-sm btn-outline-secondary me-2"
                     title="Скачать файл"
                   >
                     <i class="fas fa-download me-1"></i>Скачать
-                  </a>
+                  </button>
                   <a
                     v-if="isAdmin"
                     href="#"
@@ -141,11 +141,11 @@ export default {
         
         if (this.isAdmin) {
           // Если пользователь - администратор, получаем весь контент
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/content/all`);
+          const response = await axiosInstance.get(`${import.meta.env.VITE_API_URL}/content/all`);
           this.contents = response.data;
         } else {
           // Для обычных пользователей получаем только доступный им контент
-          const response = await axios.get(`${import.meta.env.VITE_API_URL}/content/all`);
+          const response = await axiosInstance.get(`${import.meta.env.VITE_API_URL}/content/all`);
           this.contents = response.data;
         }
       } catch (error) {
@@ -172,7 +172,7 @@ export default {
     async deleteContent(contentId) {
       if (confirm('Вы уверены, что хотите удалить этот контент?')) {
         try {
-          await axios.delete(`${import.meta.env.VITE_API_URL}/content/content/${contentId}`);
+          await axiosInstance.delete(`${import.meta.env.VITE_API_URL}/content/content/${contentId}`);
           this.fetchAllContent(); // Обновляем список контента
         } catch (error) {
           console.error('Ошибка при удалении контента:', error);
@@ -195,6 +195,49 @@ export default {
     viewDocument(content) {
       const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer/${content.id}`;
       window.open(viewerUrl, '_blank');
+    },
+
+    // Скачивание файла с правильной аутентификацией
+    async downloadDocument(content) {
+      try {
+        // Используем axios для скачивания файла с правильной аутентификацией
+        const response = await axiosInstance.get(`/content/download-file/${content.id}`, {
+          responseType: 'blob' // Важно для скачивания файлов
+        });
+        
+        // Создаем blob URL для скачивания
+        const blob = new Blob([response.data]);
+        const url = window.URL.createObjectURL(blob);
+        
+        // Создаем временную ссылку для скачивания
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = this.getFileName(content.file_path);
+        document.body.appendChild(link);
+        link.click();
+        
+        // Очищаем ресурсы
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+      } catch (error) {
+        console.error("Ошибка при скачивании документа:", error);
+        // Fallback к старому методу с токеном
+        try {
+          const tokenResponse = await axiosInstance.get(`/content/download-token/${content.id}`);
+          const downloadToken = tokenResponse.data.download_token;
+          window.location.href = `${import.meta.env.VITE_API_URL}/content/public-download/${content.id}?token=${downloadToken}`;
+        } catch (fallbackError) {
+          console.error("Ошибка при fallback скачивании:", fallbackError);
+        }
+      }
+    },
+    
+    // Получение имени файла из пути
+    getFileName(filePath) {
+      if (!filePath) return 'document';
+      const parts = filePath.split('/');
+      return parts[parts.length - 1];
     }
   }
 };
