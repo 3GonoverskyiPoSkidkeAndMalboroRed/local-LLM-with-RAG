@@ -184,4 +184,5 @@ yarl
 zipp
 PyJWT
 yandexcloud
-yandex-cloud-ml-sdk 
+yandex-cloud-ml-sdk
+slowapi>=0.1.9 

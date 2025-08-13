@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, status, Request
 from fastapi.security import OAuth2PasswordBearer
 import secrets
 from passlib.context import CryptContext
 import os
 from datetime import datetime, timedelta
 import jwt
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from sqlalchemy.orm import Session
 from database import get_db
@@ -18,6 +20,9 @@ load_dotenv()
 router = APIRouter(prefix="/user", tags=["user"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # Настройки JWT (жёсткая проверка наличия переменных окружения)
 JWT_SECRET = os.getenv("JWT_SECRET")
@@ -126,7 +131,8 @@ def generate_auth_key() -> str:
     return secrets.token_hex(16)
 
 @router.post("/login")
-async def login(user_data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.login == user_data.login).first()
     if not user or not user.check_password(user_data.password):
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
@@ -212,7 +218,14 @@ async def read_current_user(
     }
 
 @router.get("/user/{user_id}/content")
-async def get_user_content(user_id: int, db: Session = Depends(get_db)):
+async def get_user_content(
+    user_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Проверяем права: пользователь может получить только свой контент или админ
+    if not (is_admin(current_user) or current_user.id == user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для доступа к контенту другого пользователя")
     try:
         # Получаем пользователя по user_id
         user = db.query(User).filter(User.id == user_id).first()
@@ -259,7 +272,10 @@ async def get_user_content(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/users")
-async def get_users(db: Session = Depends(get_db)):
+async def get_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         users = db.query(User).all()  # Получаем всех пользователей из базы данных
         user_list = []
@@ -288,7 +304,15 @@ async def get_users(db: Session = Depends(get_db)):
 
 
 @router.put("/user/{user_id}")
-async def update_user(user_id: int, user_data: dict, db: Session = Depends(get_db)):
+async def update_user(
+    user_id: int, 
+    user_data: dict, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Проверяем права: пользователь может изменять только свои данные или админ
+    if not (is_admin(current_user) or current_user.id == user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для изменения данных другого пользователя")
     try:
         # Получаем пользователя по ID
         user = db.query(User).filter(User.id == user_id).first()
@@ -312,7 +336,11 @@ async def update_user(user_id: int, user_data: dict, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=f"Ошибка при обновлении пользователя: {str(e)}")
 
 @router.delete("/user/{user_id}")
-async def delete_user(user_id: int, db: Session = Depends(get_db)):
+async def delete_user(
+    user_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         # Получаем пользователя по ID
         user = db.query(User).filter(User.id == user_id).first()
@@ -329,7 +357,15 @@ async def delete_user(user_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при удалении пользователя: {str(e)}")
 
 @router.put("/user/{user_id}/password")
-async def update_password(user_id: int, password_data: dict, db: Session = Depends(get_db)):
+async def update_password(
+    user_id: int, 
+    password_data: dict, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Проверяем права: пользователь может изменять только свой пароль или админ
+    if not (is_admin(current_user) or current_user.id == user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для изменения пароля другого пользователя")
     try:
         # Получаем пользователя по ID
         user = db.query(User).filter(User.id == user_id).first()

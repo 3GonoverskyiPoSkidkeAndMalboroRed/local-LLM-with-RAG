@@ -91,8 +91,39 @@ export default {
     hide() {
       this.modal.hide();
     },
-    downloadDocument() {
-      window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${this.documentId}`;
+    async downloadDocument() {
+      try {
+        // Используем axios для скачивания файла с правильной аутентификацией
+        const response = await axiosInstance.get(`/content/download-file/${this.documentId}`, {
+          responseType: 'blob' // Важно для скачивания файлов
+        });
+        
+        // Создаем blob URL для скачивания
+        const blob = new Blob([response.data]);
+        const url = window.URL.createObjectURL(blob);
+        
+        // Создаем временную ссылку для скачивания
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = this.documentTitle || 'document';
+        document.body.appendChild(link);
+        link.click();
+        
+        // Очищаем ресурсы
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+      } catch (error) {
+        console.error("Ошибка при скачивании документа:", error);
+        // Fallback к старому методу с токеном
+        try {
+          const tokenResponse = await axiosInstance.get(`/content/download-token/${this.documentId}`);
+          const downloadToken = tokenResponse.data.download_token;
+          window.location.href = `${axiosInstance.defaults.baseURL}/content/public-download/${this.documentId}?token=${downloadToken}`;
+        } catch (fallbackError) {
+          console.error("Ошибка при fallback скачивании:", fallbackError);
+        }
+      }
     }
   }
 };

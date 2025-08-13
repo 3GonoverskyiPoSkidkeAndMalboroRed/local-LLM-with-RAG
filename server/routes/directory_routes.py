@@ -1,11 +1,17 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import os
 import shutil
+from sqlalchemy.orm import Session
+from database import get_db
+from routes.user_routes import require_admin
 
 router = APIRouter(prefix="/directory", tags=["directory"])
 
 @router.post("/create")
-async def create_directory(directory_path: str):
+async def create_directory(
+    directory_path: str,
+    current_user = Depends(require_admin),
+):
     """
     Создает директорию по указанному пути.
     
@@ -33,7 +39,10 @@ async def create_directory(directory_path: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/delete")
-async def delete_directory(directory_path: str):
+async def delete_directory(
+    directory_path: str,
+    current_user = Depends(require_admin),
+):
     """
     Удаляет директорию по указанному пути.
     
@@ -61,7 +70,10 @@ async def delete_directory(directory_path: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/list")
-async def list_directory(directory_path: str = "/app/files"):
+async def list_directory(
+    directory_path: str = "/app/files",
+    current_user = Depends(require_admin),
+):
     """
     Возвращает список файлов и директорий по указанному пути.
     

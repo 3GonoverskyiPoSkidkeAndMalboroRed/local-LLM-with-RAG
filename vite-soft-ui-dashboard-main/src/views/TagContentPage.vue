@@ -315,16 +315,54 @@ export default {
     },
     async downloadDocument(doc) {
       try {
-        // Скачивание документа
-        window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
+        // Используем axios для скачивания файла с правильной аутентификацией
+        const response = await axiosInstance.get(`/content/download-file/${doc.id}`, {
+          responseType: 'blob' // Важно для скачивания файлов
+        });
+        
+        // Создаем blob URL для скачивания
+        const blob = new Blob([response.data]);
+        const url = window.URL.createObjectURL(blob);
+        
+        // Создаем временную ссылку для скачивания
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = this.getFileName(doc.file_path);
+        document.body.appendChild(link);
+        link.click();
+        
+        // Очищаем ресурсы
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
       } catch (error) {
         console.error("Ошибка при скачивании документа:", error);
+        // Fallback к старому методу с токеном
+        try {
+          const tokenResponse = await axiosInstance.get(`/content/download-token/${doc.id}`);
+          const downloadToken = tokenResponse.data.download_token;
+          window.location.href = `${axiosInstance.defaults.baseURL}/content/public-download/${doc.id}?token=${downloadToken}`;
+        } catch (fallbackError) {
+          console.error("Ошибка при fallback скачивании:", fallbackError);
+        }
       }
     },
-    copyLink(docId, action) {
-      const url = action === 'view' 
-        ? `${axiosInstance.defaults.baseURL}/content/document-viewer/${docId}` 
-        : `${axiosInstance.defaults.baseURL}/content/download-file/${docId}`;
+    async copyLink(docId, action) {
+      let url;
+      if (action === 'view') {
+        url = `${axiosInstance.defaults.baseURL}/content/document-viewer/${docId}`;
+      } else {
+        try {
+          // Получаем токен для скачивания
+          const tokenResponse = await axiosInstance.get(`/content/download-token/${docId}`);
+          const downloadToken = tokenResponse.data.download_token;
+          url = `${axiosInstance.defaults.baseURL}/content/public-download/${docId}?token=${downloadToken}`;
+        } catch (error) {
+          console.error("Ошибка при получении токена для копирования ссылки:", error);
+          // Fallback к старому методу
+          url = `${axiosInstance.defaults.baseURL}/content/download-file/${docId}`;
+        }
+      }
       
       if (navigator.clipboard) {
         navigator.clipboard.writeText(url).then(() => {

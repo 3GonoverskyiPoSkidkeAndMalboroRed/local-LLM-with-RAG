@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request, status, Query
 import os
 from sqlalchemy.orm import Session
 from database import get_db
@@ -10,6 +10,8 @@ from typing import List, Optional
 import re
 import requests
 import shutil
+import mimetypes
+import urllib.parse
 
 router = APIRouter(prefix="/content", tags=["content"])
 
@@ -37,8 +39,8 @@ async def get_document_viewer_page(
         # Получаем расширение файла
         file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
         
-        # Определяем URL для скачивания файла
-        download_url = f"http://localhost:8081/content/download-file/{content_id}"
+        # Определяем URL для скачивания файла - используем относительный путь
+        download_url = f"/content/download-file/{content_id}"
         
         # Поддерживаемые форматы для Google Docs Viewer
         supported_formats = ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf']
@@ -401,11 +403,21 @@ async def get_content_by_access_and_department(
     
     
 @router.get("/content/{content_id}")
-async def get_content_by_id(content_id: int, db: Session = Depends(get_db)):
+async def get_content_by_id(
+    content_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         content = db.query(Content).filter(Content.id == content_id).first()
         if content is None:
             raise HTTPException(status_code=404, detail="Контент не найден")
+        
+        # Проверяем права доступа: админ или пользователь имеет доступ к контенту
+        if not (is_admin(current_user) or (
+            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для доступа к контенту")
         
         return {
             "id": content.id,
@@ -458,7 +470,10 @@ async def delete_content(
 
 
 @router.get("/all")
-async def get_all_content(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_all_content(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     try:
         # Проверяем, что пользователь является админом
         if not is_admin(current_user):
@@ -480,6 +495,11 @@ async def get_all_content(db: Session = Depends(get_db), current_user: User = De
         raise HTTPException(status_code=500, detail=f"Ошибка при получении контента: {str(e)}")
     
     
+def get_mime_type(file_path):
+    """Определяет MIME-тип файла по расширению"""
+    mime_type, _ = mimetypes.guess_type(file_path)
+    return mime_type or 'application/octet-stream'
+
 @router.get("/download-file/{content_id}")
 async def download_file(
     content_id: int,
@@ -511,8 +531,158 @@ async def download_file(
         else:
             raise HTTPException(status_code=404, detail="Файл не найден")
 
-    # Возвращаем файл как ответ
-    return FileResponse(file_path, media_type='application/octet-stream', filename=os.path.basename(file_path))
+    # Определяем MIME-тип файла
+    mime_type = get_mime_type(file_path)
+    
+    # Получаем имя файла и кодируем его для заголовка
+    filename = os.path.basename(file_path)
+    try:
+        # Пытаемся закодировать имя файла в latin-1
+        filename_encoded = filename.encode('latin-1').decode('latin-1')
+    except UnicodeEncodeError:
+        # Если не получается, используем URL-кодирование
+        import urllib.parse
+        filename_encoded = urllib.parse.quote(filename)
+    
+    # Возвращаем файл как ответ с правильным MIME-типом
+    return FileResponse(
+        file_path, 
+        media_type=mime_type, 
+        filename=filename_encoded,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"
+        }
+    )
+
+
+@router.get("/public-download/{content_id}")
+async def public_download_file(
+    content_id: int,
+    token: str = Query(..., description="Временный токен для скачивания"),
+    db: Session = Depends(get_db),
+):
+    """
+    Публичный эндпоинт для скачивания файлов с временным токеном.
+    Используется для скачивания через window.location.href
+    """
+    try:
+        # Декодируем токен (простая реализация - в продакшене нужно использовать JWT)
+        import base64
+        import json
+        from datetime import datetime, timedelta
+        
+        try:
+            # Декодируем токен
+            decoded_token = base64.b64decode(token).decode('utf-8')
+            token_data = json.loads(decoded_token)
+            
+            # Проверяем срок действия токена (1 час)
+            token_time = datetime.fromisoformat(token_data['timestamp'])
+            if datetime.now() - token_time > timedelta(hours=1):
+                raise HTTPException(status_code=401, detail="Токен истек")
+                
+            user_id = token_data['user_id']
+            content_id_from_token = token_data['content_id']
+            
+            # Проверяем соответствие content_id
+            if content_id_from_token != content_id:
+                raise HTTPException(status_code=401, detail="Неверный токен")
+                
+        except Exception as e:
+            raise HTTPException(status_code=401, detail="Неверный токен")
+        
+        # Получаем пользователя
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем контент из базы данных по ID
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if content is None:
+            raise HTTPException(status_code=404, detail="Контент не найден")
+
+        # Проверяем права доступа текущего пользователя
+        if not (is_admin(user) or (
+            user.access_id == content.access_level and user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для скачивания файла")
+
+        # Проверяем, существует ли файл
+        file_path = content.file_path
+        if not os.path.exists(file_path):
+            # Если файл не найден по абсолютному пути, проверяем, может быть это старый путь
+            # и нужно добавить префикс /app/files/
+            if not file_path.startswith('/app/files/'):
+                new_path = f"/app/files/{os.path.basename(file_path)}"
+                if os.path.exists(new_path):
+                    file_path = new_path
+                else:
+                    raise HTTPException(status_code=404, detail="Файл не найден")
+            else:
+                raise HTTPException(status_code=404, detail="Файл не найден")
+
+        # Получаем имя файла и кодируем его для заголовка
+        filename = os.path.basename(file_path)
+        try:
+            # Пытаемся закодировать имя файла в latin-1
+            filename_encoded = filename.encode('latin-1').decode('latin-1')
+        except UnicodeEncodeError:
+            # Если не получается, используем URL-кодирование
+            filename_encoded = urllib.parse.quote(filename)
+        
+        # Определяем MIME-тип файла
+        mime_type = get_mime_type(file_path)
+        
+        # Возвращаем файл как ответ с правильным MIME-типом
+        return FileResponse(
+            file_path, 
+            media_type=mime_type, 
+            filename=filename_encoded,
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при скачивании файла: {str(e)}")
+
+
+@router.get("/download-token/{content_id}")
+async def get_download_token(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Генерирует временный токен для скачивания файла
+    """
+    # Получаем контент из базы данных по ID
+    content = db.query(Content).filter(Content.id == content_id).first()
+    if content is None:
+        raise HTTPException(status_code=404, detail="Контент не найден")
+
+    # Проверяем права доступа текущего пользователя
+    if not (is_admin(current_user) or (
+        current_user.access_id == content.access_level and current_user.department_id == content.department_id
+    )):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для скачивания файла")
+
+    # Генерируем временный токен
+    import base64
+    import json
+    from datetime import datetime
+    
+    token_data = {
+        'user_id': current_user.id,
+        'content_id': content_id,
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    token = base64.b64encode(json.dumps(token_data).encode('utf-8')).decode('utf-8')
+    
+    return {"download_token": token}
 
 
 
