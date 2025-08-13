@@ -270,16 +270,38 @@ export default {
     },
     async downloadDocument(doc) {
       try {
-        // Скачивание документа
-        window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
+        // Получаем токен для скачивания
+        const tokenResponse = await axiosInstance.get(`/content/download-token/${doc.id}`);
+        const downloadToken = tokenResponse.data.download_token;
+        
+        // Скачиваем файл с токеном
+        window.location.href = `${axiosInstance.defaults.baseURL}/content/public-download/${doc.id}?token=${downloadToken}`;
       } catch (error) {
         console.error("Ошибка при скачивании документа:", error);
+        // Fallback к старому методу, если новый не работает
+        try {
+          window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${doc.id}`;
+        } catch (fallbackError) {
+          console.error("Ошибка при fallback скачивании:", fallbackError);
+        }
       }
     },
-    copyLink(docId, action) {
-      const url = action === 'view' 
-        ? `${axiosInstance.defaults.baseURL}/content/document-viewer/${docId}` 
-        : `${axiosInstance.defaults.baseURL}/content/download-file/${docId}`;
+    async copyLink(docId, action) {
+      let url;
+      if (action === 'view') {
+        url = `${axiosInstance.defaults.baseURL}/content/document-viewer/${docId}`;
+      } else {
+        try {
+          // Получаем токен для скачивания
+          const tokenResponse = await axiosInstance.get(`/content/download-token/${docId}`);
+          const downloadToken = tokenResponse.data.download_token;
+          url = `${axiosInstance.defaults.baseURL}/content/public-download/${docId}?token=${downloadToken}`;
+        } catch (error) {
+          console.error("Ошибка при получении токена для копирования ссылки:", error);
+          // Fallback к старому методу
+          url = `${axiosInstance.defaults.baseURL}/content/download-file/${docId}`;
+        }
+      }
       
       if (navigator.clipboard) {
         navigator.clipboard.writeText(url).then(() => {

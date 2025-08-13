@@ -155,8 +155,17 @@ export default {
     },
     
     // Получение ссылки для скачивания файла
-    getDownloadLink(contentId) {
-      return `${import.meta.env.VITE_API_URL}/content/download-file/${contentId}`;
+    async getDownloadLink(contentId) {
+      try {
+        // Получаем токен для скачивания
+        const tokenResponse = await axiosInstance.get(`/content/download-token/${contentId}`);
+        const downloadToken = tokenResponse.data.download_token;
+        return `${import.meta.env.VITE_API_URL}/content/public-download/${contentId}?token=${downloadToken}`;
+      } catch (error) {
+        console.error("Ошибка при получении токена для скачивания:", error);
+        // Fallback к старому методу
+        return `${import.meta.env.VITE_API_URL}/content/download-file/${contentId}`;
+      }
     },
     
     // Удаление контента

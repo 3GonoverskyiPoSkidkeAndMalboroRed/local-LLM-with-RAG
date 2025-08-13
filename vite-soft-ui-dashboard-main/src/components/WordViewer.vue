@@ -91,8 +91,23 @@ export default {
     hide() {
       this.modal.hide();
     },
-    downloadDocument() {
-      window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${this.documentId}`;
+    async downloadDocument() {
+      try {
+        // Получаем токен для скачивания
+        const tokenResponse = await axiosInstance.get(`/content/download-token/${this.documentId}`);
+        const downloadToken = tokenResponse.data.download_token;
+        
+        // Скачиваем файл с токеном
+        window.location.href = `${axiosInstance.defaults.baseURL}/content/public-download/${this.documentId}?token=${downloadToken}`;
+      } catch (error) {
+        console.error("Ошибка при скачивании документа:", error);
+        // Fallback к старому методу, если новый не работает
+        try {
+          window.location.href = `${axiosInstance.defaults.baseURL}/content/download-file/${this.documentId}`;
+        } catch (fallbackError) {
+          console.error("Ошибка при fallback скачивании:", fallbackError);
+        }
+      }
     }
   }
 };

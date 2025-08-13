@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Request, status, Query
 import os
 from sqlalchemy.orm import Session
 from database import get_db
@@ -522,6 +522,117 @@ async def download_file(
 
     # Возвращаем файл как ответ
     return FileResponse(file_path, media_type='application/octet-stream', filename=os.path.basename(file_path))
+
+
+@router.get("/public-download/{content_id}")
+async def public_download_file(
+    content_id: int,
+    token: str = Query(..., description="Временный токен для скачивания"),
+    db: Session = Depends(get_db),
+):
+    """
+    Публичный эндпоинт для скачивания файлов с временным токеном.
+    Используется для скачивания через window.location.href
+    """
+    try:
+        # Декодируем токен (простая реализация - в продакшене нужно использовать JWT)
+        import base64
+        import json
+        from datetime import datetime, timedelta
+        
+        try:
+            # Декодируем токен
+            decoded_token = base64.b64decode(token).decode('utf-8')
+            token_data = json.loads(decoded_token)
+            
+            # Проверяем срок действия токена (1 час)
+            token_time = datetime.fromisoformat(token_data['timestamp'])
+            if datetime.now() - token_time > timedelta(hours=1):
+                raise HTTPException(status_code=401, detail="Токен истек")
+                
+            user_id = token_data['user_id']
+            content_id_from_token = token_data['content_id']
+            
+            # Проверяем соответствие content_id
+            if content_id_from_token != content_id:
+                raise HTTPException(status_code=401, detail="Неверный токен")
+                
+        except Exception as e:
+            raise HTTPException(status_code=401, detail="Неверный токен")
+        
+        # Получаем пользователя
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем контент из базы данных по ID
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if content is None:
+            raise HTTPException(status_code=404, detail="Контент не найден")
+
+        # Проверяем права доступа текущего пользователя
+        if not (is_admin(user) or (
+            user.access_id == content.access_level and user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для скачивания файла")
+
+        # Проверяем, существует ли файл
+        file_path = content.file_path
+        if not os.path.exists(file_path):
+            # Если файл не найден по абсолютному пути, проверяем, может быть это старый путь
+            # и нужно добавить префикс /app/files/
+            if not file_path.startswith('/app/files/'):
+                new_path = f"/app/files/{os.path.basename(file_path)}"
+                if os.path.exists(new_path):
+                    file_path = new_path
+                else:
+                    raise HTTPException(status_code=404, detail="Файл не найден")
+            else:
+                raise HTTPException(status_code=404, detail="Файл не найден")
+
+        # Возвращаем файл как ответ
+        return FileResponse(file_path, media_type='application/octet-stream', filename=os.path.basename(file_path))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при скачивании файла: {str(e)}")
+
+
+@router.get("/download-token/{content_id}")
+async def get_download_token(
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Генерирует временный токен для скачивания файла
+    """
+    # Получаем контент из базы данных по ID
+    content = db.query(Content).filter(Content.id == content_id).first()
+    if content is None:
+        raise HTTPException(status_code=404, detail="Контент не найден")
+
+    # Проверяем права доступа текущего пользователя
+    if not (is_admin(current_user) or (
+        current_user.access_id == content.access_level and current_user.department_id == content.department_id
+    )):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для скачивания файла")
+
+    # Генерируем временный токен
+    import base64
+    import json
+    from datetime import datetime
+    
+    token_data = {
+        'user_id': current_user.id,
+        'content_id': content_id,
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    token = base64.b64encode(json.dumps(token_data).encode('utf-8')).decode('utf-8')
+    
+    return {"download_token": token}
 
 
 
