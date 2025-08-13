@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, status, Request
 from fastapi.security import OAuth2PasswordBearer
 import secrets
 from passlib.context import CryptContext
@@ -12,12 +12,18 @@ from models_db import Access, Content, User, Department
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+# Rate limiting import
+from rate_limiter import get_limiter
+
 # Загружаем переменные окружения из .env, если запускается локально
 load_dotenv()
 
 router = APIRouter(prefix="/user", tags=["user"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Получаем глобальный rate limiter
+limiter = get_limiter()
 
 # Настройки JWT (жёсткая проверка наличия переменных окружения)
 JWT_SECRET = os.getenv("JWT_SECRET")
@@ -94,28 +100,29 @@ class UserCreate(BaseModel):
     full_name: str = None
 
 @router.post("/register")
-async def register(user: UserCreate, db: Session = Depends(get_db)):
-    # Проверка существования пользователя
-    existing_user = db.query(User).filter(User.login == user.login).first()
+@limiter.limit("5/minute")
+async def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
+    # Проверяем, существует ли пользователь с таким логином
+    existing_user = db.query(User).filter(User.login == user_data.login).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Пользователь уже существует")
+        raise HTTPException(status_code=400, detail="Пользователь с таким логином уже существует")
 
     # Хеширование пароля
-    hashed_password = pwd_context.hash(user.password)
+    hashed_password = pwd_context.hash(user_data.password)
     new_user = User(
-        login=user.login,
+        login=user_data.login,
         password=hashed_password,
-        role_id=user.role_id,
-        department_id=user.department_id,
-        access_id=user.access_id,
-        full_name=user.full_name
+        role_id=user_data.role_id,
+        department_id=user_data.department_id,
+        access_id=user_data.access_id,
+        full_name=user_data.full_name
     )
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    return {"message": "Пользователь успешно зарегистрирован"}
+    return {"message": "Пользователь успешно зарегистрирован", "user_id": new_user.id}
 
 class UserLogin(BaseModel):
     login: str
@@ -126,7 +133,8 @@ def generate_auth_key() -> str:
     return secrets.token_hex(16)
 
 @router.post("/login")
-async def login(user_data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.login == user_data.login).first()
     if not user or not user.check_password(user_data.password):
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")

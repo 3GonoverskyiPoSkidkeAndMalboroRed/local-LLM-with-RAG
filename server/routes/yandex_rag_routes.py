@@ -1,21 +1,26 @@
 """
-Роуты для Yandex RAG системы
+Маршруты для работы с Yandex RAG (Retrieval-Augmented Generation)
 """
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, status
+import logging
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, status, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import Dict, Any, List, Optional
-import logging
-
 from database import get_db
 from models_db import Department, Content
 from yandex_rag_service import yandex_rag_service
 from routes.user_routes import require_admin
 
+# Rate limiting import
+from rate_limiter import get_limiter
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/yandex-rag", tags=["Yandex RAG"])
+
+# Получаем глобальный rate limiter
+limiter = get_limiter()
 
 # Pydantic модели
 class InitializeRAGRequest(BaseModel):
@@ -107,7 +112,12 @@ async def _initialize_rag_background(department_id: int, force_reload: bool):
         logger.error(f"Ошибка в фоновой инициализации RAG: {e}")
 
 @router.post("/query", response_model=RAGResponse)
-async def query_rag(request: RAGQueryRequest, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def query_rag(
+    req: Request,
+    request: RAGQueryRequest, 
+    db: Session = Depends(get_db),
+):
     """
     Выполняет RAG запрос для получения ответа на основе документов отдела
     """

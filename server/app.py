@@ -14,6 +14,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import secrets
 from typing import List
 from fastapi.responses import FileResponse
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+# Rate limiting imports
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from rate_limiter import get_limiter
 
 from models_db import User, Department, Access, Content, Tag
 from document_loader import load_documents_into_database, vec_search
@@ -41,6 +49,11 @@ except Exception as e:
 # Инициализация глобальных переменных
 app = FastAPI()
 
+# Инициализация rate limiter
+limiter = get_limiter()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Или укажите конкретные домены
@@ -48,6 +61,9 @@ app.add_middleware(
     allow_methods=["*"],  # Разрешить все методы
     allow_headers=["*"],  # Разрешить все заголовки
 )
+
+# Глобальный rate limiting middleware
+# Глобальный rate limiting middleware убран - используем только декораторы на эндпоинтах
 
 # Добавляем маршрутизатор для тестов и анкет
 app.include_router(quiz_router)
@@ -78,6 +94,38 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 #     model: str = "ilyagusev/saiga_llama3:latest"
 
 # Функции моделей теперь в LLMStateManager
+
+@app.get("/rate-limit-status")
+async def get_rate_limit_status(request: Request):
+    """
+    Получить текущий статус rate limiting для IP адреса
+    """
+    try:
+        client_ip = get_remote_address(request)
+        
+        # Получаем информацию о текущих лимитах
+        rate_limit_info = {
+            "client_ip": client_ip,
+            "global_limit": "100/minute",
+            "endpoint_limits": {
+                "login": "10/minute",
+                "register": "5/minute", 
+                "upload_content": "20/minute",
+                "upload_files": "10/minute",
+                "feedback_create": "30/minute",
+                "yandex_ai_generate": "60/minute",
+                "yandex_rag_query": "30/minute"
+            },
+            "message": "Rate limiting активен"
+        }
+        
+        return rate_limit_info
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Ошибка при получении статуса rate limiting: {str(e)}"}
+        )
 
 # Эндпоинт для парсинга аргументов
 @app.get("/parse-args")

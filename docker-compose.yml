@@ -21,6 +21,21 @@ services:
     networks:
       - app-network
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
   backend:
     build:
       context: ./server
@@ -33,10 +48,13 @@ services:
       # - OLLAMA_HOST=http://ollama:11434
       - API_URL=http://backend:8000
       - EXTERNAL_URL=http://nginx:80
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
-    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "3", "--limit-concurrency", "10", "--backlog", "100"]
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "10", "--backlog", "100"]
     networks:
       - app-network
     volumes:
@@ -90,6 +108,7 @@ services:
 volumes:
   db_data:
   files_storage:
+  redis_data:
 
 networks:
   app-network:

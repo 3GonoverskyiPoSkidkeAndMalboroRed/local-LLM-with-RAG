@@ -1,12 +1,23 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, Request
+from sqlalchemy.orm import Session
+from database import get_db
+from models_db import User
+from routes.user_routes import get_current_user
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
-from yandex_ai_service import yandex_ai_service
+from typing import Optional, Dict, Any
 import logging
+
+# Rate limiting import
+from rate_limiter import get_limiter
+
+from yandex_ai_service import YandexAIService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/yandex-ai", tags=["Yandex AI"])
+router = APIRouter(prefix="/yandex-ai", tags=["yandex-ai"])
+
+# Получаем глобальный rate limiter
+limiter = get_limiter()
 
 # Pydantic модели для запросов
 class GenerateTextRequest(BaseModel):
@@ -31,8 +42,14 @@ class GenerateTextResponse(BaseModel):
     sdk_used: Optional[bool] = None
     sdk_type: Optional[str] = None
 
-@router.post("/generate", response_model=GenerateTextResponse)
-async def generate_text(request: GenerateTextRequest):
+@router.post("/generate")
+@limiter.limit("60/minute")
+async def generate_text(
+    req: Request,
+    request: GenerateTextRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Генерация текста с помощью Yandex GPT через Yandex Cloud ML SDK
     

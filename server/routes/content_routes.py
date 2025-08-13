@@ -11,7 +11,13 @@ import re
 import requests
 import shutil
 
+# Rate limiting import
+from rate_limiter import get_limiter
+
 router = APIRouter(prefix="/content", tags=["content"])
+
+# Получаем глобальный rate limiter
+limiter = get_limiter()
 
 @router.get("/document-viewer/{content_id}")
 async def get_document_viewer_page(
@@ -191,7 +197,9 @@ async def get_document_viewer_page(
         raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы просмотра: {str(e)}")
 
 @router.post("/upload-content")
+@limiter.limit("20/minute")
 async def upload_content(
+    request: Request,
     title: str,
     description: str,
     access_id: int,
@@ -250,7 +258,9 @@ async def upload_content(
     return {"message": f"Контент успешно загружен в {file_location}"}
 
 @router.post("/upload-files")
+@limiter.limit("10/minute")
 async def upload_files(
+    request: Request,
     files: List[UploadFile] = File(...),
     access_level: int = 1,
     department_id: int = 1,

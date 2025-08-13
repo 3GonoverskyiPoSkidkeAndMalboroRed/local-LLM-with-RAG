@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, status, Request
 import os
 from sqlalchemy.orm import Session
 from database import get_db
@@ -10,14 +10,22 @@ from typing import List, Optional
 import base64
 from io import BytesIO
 
+# Rate limiting import
+from rate_limiter import get_limiter
+
 router = APIRouter(prefix="/feedback", tags=["feedback"])
+
+# Получаем глобальный rate limiter
+limiter = get_limiter()
 
 class FeedbackCreate(BaseModel):
     user_id: int
     text: str
 
 @router.post("/create")
+@limiter.limit("30/minute")
 async def create_feedback(
+    request: Request,
     user_id: int = Form(...),
     text: str = Form(...),
     photo: Optional[UploadFile] = File(None),
