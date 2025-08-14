@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, APIRouter, status
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Query, APIRouter, status, Request
 from pydantic import BaseModel
 import uvicorn
 import os
@@ -46,7 +46,7 @@ except Exception as e:
 # Инициализация глобальных переменных
 app = FastAPI()
 
-# Rate limiting
+# ✅ Улучшенный Rate limiting с разными лимитами для разных типов операций
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -92,7 +92,8 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Эндпоинт для парсинга аргументов
 @app.get("/parse-args")
-async def parse_args():
+@limiter.limit("30/minute")  # ✅ Умеренный лимит для системных эндпоинтов
+async def parse_args(request: Request):
     args = parse_arguments()
     return {
         "model": args.model,
@@ -103,7 +104,8 @@ async def parse_args():
     }
 
 @app.get("/check_db_connection")
-async def check_db_connection():
+@limiter.limit("10/minute")  # ✅ Строгий лимит для проверки БД
+async def check_db_connection(request: Request):
     try:
         # Создаем сессию
         db = SessionLocal()
@@ -160,22 +162,26 @@ def parse_arguments() -> argparse.Namespace:
 
 
 @app.get("/api/departments")
-async def get_departments(db: Session = Depends(get_db)):
+@limiter.limit("60/minute")  # ✅ Умеренный лимит для справочных данных
+async def get_departments(request: Request, db: Session = Depends(get_db)):
     departments = db.query(Department).all()
     return [{"id": dept.id, "department_name": dept.department_name} for dept in departments]
 
 @app.get("/api/access_levels")
-async def get_access_levels(db: Session = Depends(get_db)):
+@limiter.limit("60/minute")  # ✅ Умеренный лимит для справочных данных
+async def get_access_levels(request: Request, db: Session = Depends(get_db)):
     access_levels = db.query(Access).all()
     return [{"id": access_level.id, "access_name": access_level.access_name} for access_level in access_levels]
 
 @app.get("/departments")
-async def get_departments_list(db: Session = Depends(get_db)):
+@limiter.limit("60/minute")  # ✅ Умеренный лимит для справочных данных
+async def get_departments_list(request: Request, db: Session = Depends(get_db)):
     departments = db.query(Department).all()
     return [{"id": dept.id, "department_name": dept.department_name} for dept in departments]
 
 @app.get("/access-levels")
-async def get_access_levels_list(db: Session = Depends(get_db)):
+@limiter.limit("60/minute")  # ✅ Умеренный лимит для справочных данных
+async def get_access_levels_list(request: Request, db: Session = Depends(get_db)):
     access_levels = db.query(Access).all()
     return [{"id": access.id, "access_name": access.access_name} for access in access_levels]
 
@@ -183,7 +189,8 @@ class TagCreate(BaseModel):
     tag_name: str
 
 @app.post("/tags")
-async def create_tag(tag: TagCreate, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")  # ✅ Умеренный лимит для создания тегов
+async def create_tag(request: Request, tag: TagCreate, db: Session = Depends(get_db)):
     try:
         new_tag = Tag(tag_name=tag.tag_name)
         db.add(new_tag)
@@ -194,7 +201,8 @@ async def create_tag(tag: TagCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при добавлении тега: {str(e)}")
 
 @app.get("/tags")
-async def get_tags(db: Session = Depends(get_db)):
+@limiter.limit("60/minute")  # ✅ Умеренный лимит для получения тегов
+async def get_tags(request: Request, db: Session = Depends(get_db)):
     try:
         tags = db.query(Tag).all()  # Получаем все теги из базы данных
         return {"tags": tags}
@@ -202,7 +210,8 @@ async def get_tags(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Ошибка при получении тегов: {str(e)}")
 
 @app.get("/user/{user_id}/content/by-tags")
-async def get_user_content_by_tags(user_id: int, db: Session = Depends(get_db)):
+@limiter.limit("120/minute")  # ✅ Высокий лимит для получения контента
+async def get_user_content_by_tags(request: Request, user_id: int, db: Session = Depends(get_db)):
     try:
         # Получаем пользователя по user_id
         user = db.query(User).filter(User.id == user_id).first()
@@ -285,7 +294,9 @@ async def get_user_content_by_tags(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/search-documents")
+@limiter.limit("100/minute")  # ✅ Высокий лимит для поиска
 async def search_documents(
+    request: Request,
     user_id: int,
     search_query: str = Query(None, description="Поисковый запрос для названия, описания или имени файла"),
     db: Session = Depends(get_db)

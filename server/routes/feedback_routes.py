@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, status, Request
 import os
 from sqlalchemy.orm import Session
 from database import get_db
@@ -8,38 +8,52 @@ from fastapi.responses import FileResponse, Response
 from typing import List, Optional
 import base64
 from io import BytesIO
-from routes.user_routes import require_admin
+from routes.user_routes import require_admin, get_current_user, is_admin
+# ✅ Добавляем импорт для rate limiting
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
+# ✅ Добавляем rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 class FeedbackCreate(BaseModel):
-    user_id: int
     text: str
 
 @router.post("/create")
+@limiter.limit("10/minute")  # ✅ Умеренный лимит для создания отзывов
 async def create_feedback(
-    user_id: int = Form(...),
+    request: Request,
     text: str = Form(...),
     photo: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Создает новое сообщение обратной связи с возможностью прикрепления фото
     """
     try:
-        # Проверяем существование пользователя
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        # Используем текущего пользователя вместо user_id из формы
+        user = current_user
         
         # Обрабатываем фото, если оно предоставлено
         photo_data = None
         if photo:
+            # Добавляем валидацию файла
+            if photo.size and photo.size > 5 * 1024 * 1024:  # 5MB лимит
+                raise HTTPException(status_code=400, detail="Размер файла превышает 5MB")
+            
+            # Проверяем тип файла
+            allowed_types = ["image/jpeg", "image/png", "image/gif"]
+            if photo.content_type not in allowed_types:
+                raise HTTPException(status_code=400, detail="Неподдерживаемый тип файла. Разрешены только JPEG, PNG, GIF")
+            
             photo_data = await photo.read()
         
         # Создаем новую запись обратной связи
         new_feedback = Feedback(
-            user_id=user_id,
+            user_id=user.id,  # Используем ID текущего пользователя
             text=text,
             photo=photo_data
         )
@@ -51,12 +65,16 @@ async def create_feedback(
         
         return {"message": "Сообщение обратной связи успешно создано", "feedback_id": new_feedback.id}
     
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Ошибка при создании сообщения: {str(e)}")
 
 @router.get("/list")
+@limiter.limit("30/minute")  # ✅ Умеренный лимит для получения списка отзывов
 async def get_feedback_list(
+    request: Request,
     db: Session = Depends(get_db),
     current_user = Depends(require_admin),
 ):
@@ -64,7 +82,6 @@ async def get_feedback_list(
     Получает список всех сообщений обратной связи (доступно только для администраторов)
     """
     try:
-        
         # Получаем все сообщения обратной связи
         feedback_list = db.query(Feedback).order_by(Feedback.created_at.desc()).all()
         
@@ -94,19 +111,17 @@ async def get_feedback_list(
         raise HTTPException(status_code=500, detail=f"Ошибка при получении списка сообщений: {str(e)}")
 
 @router.get("/photo/{feedback_id}")
+@limiter.limit("60/minute")  # ✅ Высокий лимит для получения фото
 async def get_feedback_photo(
+    request: Request,
     feedback_id: int, 
     db: Session = Depends(get_db),
     current_user = Depends(require_admin),
 ):
     """
-    Получает фото для сообщения обратной связи по его ID
+    Получает фото для сообщения обратной связи по его ID (только для администраторов)
     """
     try:
-        # В реальном приложении здесь должна быть проверка прав администратора
-        # if not current_user.is_admin:
-        #     raise HTTPException(status_code=403, detail="Доступ запрещен")
-        
         # Находим сообщение по ID
         feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
         if not feedback:
@@ -125,16 +140,17 @@ async def get_feedback_photo(
         raise HTTPException(status_code=500, detail=f"Ошибка при получении фото: {str(e)}")
 
 @router.get("/detail/{feedback_id}")
+@limiter.limit("60/minute")  # ✅ Высокий лимит для получения деталей
 async def get_feedback_detail(
+    request: Request,
     feedback_id: int, 
     db: Session = Depends(get_db),
     current_user = Depends(require_admin),
 ):
     """
-    Получает детальную информацию о сообщении обратной связи по его ID
+    Получает детальную информацию о сообщении обратной связи по его ID (только для администраторов)
     """
     try:
-        
         # Находим сообщение по ID
         feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
         if not feedback:
@@ -165,3 +181,67 @@ async def get_feedback_detail(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении информации о сообщении: {str(e)}")
+
+@router.get("/my-feedback")
+@limiter.limit("60/minute")  # ✅ Высокий лимит для получения собственных отзывов
+async def get_my_feedback(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Получает список собственных сообщений обратной связи пользователя
+    """
+    try:
+        # Получаем отзывы текущего пользователя
+        feedback_list = db.query(Feedback).filter(
+            Feedback.user_id == current_user.id
+        ).order_by(Feedback.created_at.desc()).all()
+        
+        # Формируем ответ
+        result = []
+        for feedback in feedback_list:
+            result.append({
+                "id": feedback.id,
+                "text": feedback.text,
+                "created_at": feedback.created_at,
+                "has_photo": feedback.photo is not None
+            })
+        
+        return {"feedback_list": result}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при получении списка сообщений: {str(e)}")
+
+@router.delete("/{feedback_id}")
+@limiter.limit("20/minute")  # ✅ Умеренный лимит для удаления отзывов
+async def delete_feedback(
+    request: Request,
+    feedback_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Удаляет сообщение обратной связи (пользователь может удалить только свои отзывы, админ - любые)
+    """
+    try:
+        # Находим сообщение по ID
+        feedback = db.query(Feedback).filter(Feedback.id == feedback_id).first()
+        if not feedback:
+            raise HTTPException(status_code=404, detail="Сообщение не найдено")
+        
+        # Проверяем права: пользователь может удалить только свои отзывы или админ
+        if not (is_admin(current_user) or feedback.user_id == current_user.id):
+            raise HTTPException(status_code=403, detail="Недостаточно прав для удаления этого сообщения")
+        
+        # Удаляем сообщение
+        db.delete(feedback)
+        db.commit()
+        
+        return {"message": "Сообщение успешно удалено"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка при удалении сообщения: {str(e)}")
