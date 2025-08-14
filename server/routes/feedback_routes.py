@@ -8,35 +8,38 @@ from fastapi.responses import FileResponse, Response
 from typing import List, Optional
 import base64
 from io import BytesIO
-# ✅ Добавляем импорт для аутентификации
 from routes.user_routes import require_admin, get_current_user, is_admin
+# ✅ Добавляем импорт для rate limiting
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
+# ✅ Добавляем rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
 class FeedbackCreate(BaseModel):
-    # ✅ Убираем user_id из модели - будет использоваться текущий пользователь
     text: str
 
 @router.post("/create")
+@limiter.limit("10/minute")  # ✅ Умеренный лимит для создания отзывов
 async def create_feedback(
-    # ✅ Убираем user_id из параметров
     text: str = Form(...),
     photo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    # ✅ Добавляем аутентификацию
     current_user: User = Depends(get_current_user)
 ):
     """
     Создает новое сообщение обратной связи с возможностью прикрепления фото
     """
     try:
-        # ✅ Используем текущего пользователя вместо user_id из формы
+        # Используем текущего пользователя вместо user_id из формы
         user = current_user
         
         # Обрабатываем фото, если оно предоставлено
         photo_data = None
         if photo:
-            # ✅ Добавляем валидацию файла
+            # Добавляем валидацию файла
             if photo.size and photo.size > 5 * 1024 * 1024:  # 5MB лимит
                 raise HTTPException(status_code=400, detail="Размер файла превышает 5MB")
             
@@ -49,7 +52,7 @@ async def create_feedback(
         
         # Создаем новую запись обратной связи
         new_feedback = Feedback(
-            user_id=user.id,  # ✅ Используем ID текущего пользователя
+            user_id=user.id,  # Используем ID текущего пользователя
             text=text,
             photo=photo_data
         )
@@ -68,9 +71,9 @@ async def create_feedback(
         raise HTTPException(status_code=500, detail=f"Ошибка при создании сообщения: {str(e)}")
 
 @router.get("/list")
+@limiter.limit("30/minute")  # ✅ Умеренный лимит для получения списка отзывов
 async def get_feedback_list(
     db: Session = Depends(get_db),
-    # ✅ Уже есть проверка на админа
     current_user = Depends(require_admin),
 ):
     """
@@ -106,10 +109,10 @@ async def get_feedback_list(
         raise HTTPException(status_code=500, detail=f"Ошибка при получении списка сообщений: {str(e)}")
 
 @router.get("/photo/{feedback_id}")
+@limiter.limit("60/minute")  # ✅ Высокий лимит для получения фото
 async def get_feedback_photo(
     feedback_id: int, 
     db: Session = Depends(get_db),
-    # ✅ Уже есть проверка на админа
     current_user = Depends(require_admin),
 ):
     """
@@ -134,10 +137,10 @@ async def get_feedback_photo(
         raise HTTPException(status_code=500, detail=f"Ошибка при получении фото: {str(e)}")
 
 @router.get("/detail/{feedback_id}")
+@limiter.limit("60/minute")  # ✅ Высокий лимит для получения деталей
 async def get_feedback_detail(
     feedback_id: int, 
     db: Session = Depends(get_db),
-    # ✅ Уже есть проверка на админа
     current_user = Depends(require_admin),
 ):
     """
@@ -175,8 +178,8 @@ async def get_feedback_detail(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении информации о сообщении: {str(e)}")
 
-# ✅ Добавляем новый эндпоинт для получения собственных отзывов пользователя
 @router.get("/my-feedback")
+@limiter.limit("60/minute")  # ✅ Высокий лимит для получения собственных отзывов
 async def get_my_feedback(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -205,8 +208,8 @@ async def get_my_feedback(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении списка сообщений: {str(e)}")
 
-# ✅ Добавляем эндпоинт для удаления собственного отзыва
 @router.delete("/{feedback_id}")
+@limiter.limit("20/minute")  # ✅ Умеренный лимит для удаления отзывов
 async def delete_feedback(
     feedback_id: int,
     db: Session = Depends(get_db),
@@ -221,7 +224,7 @@ async def delete_feedback(
         if not feedback:
             raise HTTPException(status_code=404, detail="Сообщение не найдено")
         
-        # ✅ Проверяем права: пользователь может удалить только свои отзывы или админ
+        # Проверяем права: пользователь может удалить только свои отзывы или админ
         if not (is_admin(current_user) or feedback.user_id == current_user.id):
             raise HTTPException(status_code=403, detail="Недостаточно прав для удаления этого сообщения")
         
