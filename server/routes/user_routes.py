@@ -99,7 +99,6 @@ class UserCreate(BaseModel):
     full_name: str = None
 
 @router.post("/register")
-@limiter.limit("3/minute")  # ✅ Строгий лимит для регистрации
 async def register(user: UserCreate, db: Session = Depends(get_db)):
     # Проверка существования пользователя
     existing_user = db.query(User).filter(User.login == user.login).first()
@@ -174,7 +173,7 @@ async def login(request: Request, user_data: UserLogin, db: Session = Depends(ge
 
 @router.get("/user/{id}")
 @limiter.limit("60/minute")  # ✅ Умеренный лимит для получения информации о пользователе
-async def get_user(id: int, db: Session = Depends(get_db)):
+async def get_user(request: Request, id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -198,6 +197,7 @@ async def get_user(id: int, db: Session = Depends(get_db)):
 @router.get("/me")
 @limiter.limit("120/minute")  # ✅ Высокий лимит для получения собственного профиля
 async def read_current_user(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -221,6 +221,7 @@ async def read_current_user(
 @router.get("/user/{user_id}/content")
 @limiter.limit("100/minute")  # ✅ Высокий лимит для получения контента
 async def get_user_content(
+    request: Request,
     user_id: int, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -274,6 +275,7 @@ async def get_user_content(
 @router.get("/users")
 @limiter.limit("30/minute")  # ✅ Умеренный лимит для получения списка пользователей
 async def get_users(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -306,6 +308,7 @@ async def get_users(
 @router.put("/user/{user_id}")
 @limiter.limit("20/minute")  # ✅ Умеренный лимит для обновления пользователей
 async def update_user(
+    request: Request,
     user_id: int, 
     user_data: dict, 
     db: Session = Depends(get_db),
@@ -339,6 +342,7 @@ async def update_user(
 @router.delete("/user/{user_id}")
 @limiter.limit("10/minute")  # ✅ Строгий лимит для удаления пользователей
 async def delete_user(
+    request: Request,
     user_id: int, 
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
@@ -361,6 +365,7 @@ async def delete_user(
 @router.put("/user/{user_id}/password")
 @limiter.limit("5/minute")  # ✅ Строгий лимит для смены пароля
 async def update_password(
+    request: Request,
     user_id: int, 
     password_data: dict, 
     db: Session = Depends(get_db),

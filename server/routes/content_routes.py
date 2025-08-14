@@ -24,6 +24,7 @@ limiter = Limiter(key_func=get_remote_address)
 @router.get("/document-viewer/{content_id}")
 @limiter.limit("100/minute")  # ✅ Высокий лимит для просмотра документов
 async def get_document_viewer_page(
+    request: Request,
     content_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -202,6 +203,7 @@ async def get_document_viewer_page(
 @router.post("/upload-content")
 @limiter.limit("20/minute")  # ✅ Умеренный лимит для загрузки контента
 async def upload_content(
+    request: Request,
     title: str,
     description: str,
     access_id: int,
@@ -262,6 +264,7 @@ async def upload_content(
 @router.post("/upload-files")
 @limiter.limit("10/minute")  # ✅ Строгий лимит для массовой загрузки
 async def upload_files(
+    request: Request,
     files: List[UploadFile] = File(...),
     access_level: int = 1,
     department_id: int = 1,
@@ -334,6 +337,7 @@ class ContentUpdate(BaseModel):
 @router.put("/{content_id}")
 @limiter.limit("30/minute")  # ✅ Умеренный лимит для обновления контента
 async def update_content(
+    request: Request,
     content_id: int,
     content_data: ContentUpdate,
     db: Session = Depends(get_db)
@@ -379,6 +383,7 @@ class ContentBase(BaseModel):
 @router.get("/content/filter")
 @limiter.limit("120/minute")  # ✅ Высокий лимит для фильтрации
 async def get_content_by_access_and_department(
+    request: Request,
     access_level: int,
     department_id: int,
     tag_id: int = None,  # Новый параметр для фильтрации по тегу
@@ -416,6 +421,7 @@ async def get_content_by_access_and_department(
 @router.get("/content/{content_id}")
 @limiter.limit("100/minute")  # ✅ Высокий лимит для получения контента
 async def get_content_by_id(
+    request: Request,
     content_id: int, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -446,6 +452,7 @@ async def get_content_by_id(
 @router.delete("/content/{content_id}")
 @limiter.limit("20/minute")  # ✅ Умеренный лимит для удаления
 async def delete_content(
+    request: Request,
     content_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -485,6 +492,7 @@ async def delete_content(
 @router.get("/all")
 @limiter.limit("30/minute")  # ✅ Умеренный лимит для получения всего контента
 async def get_all_content(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -513,6 +521,7 @@ def get_mime_type(file_path):
 @router.get("/download-file/{content_id}")
 @limiter.limit("50/minute")  # ✅ Умеренный лимит для скачивания
 async def download_file(
+    request: Request,
     content_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -569,6 +578,7 @@ async def download_file(
 @router.get("/public-download/{content_id}")
 @limiter.limit("30/minute")  # ✅ Умеренный лимит для публичного скачивания
 async def public_download_file(
+    request: Request,
     content_id: int,
     token: str = Query(..., description="Временный токен для скачивания"),
     db: Session = Depends(get_db),
@@ -664,6 +674,7 @@ async def public_download_file(
 @router.get("/download-token/{content_id}")
 @limiter.limit("50/minute")  # ✅ Умеренный лимит для получения токенов
 async def get_download_token(
+    request: Request,
     content_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -701,7 +712,7 @@ async def get_download_token(
 
 @router.get("/user/{user_id}/content/by-tags/{tag_id}")
 @limiter.limit("100/minute")  # ✅ Высокий лимит для получения контента по тегам
-async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Session = Depends(get_db)):
+async def get_user_content_by_tags_and_tag_id(request: Request, user_id: int, tag_id: int, db: Session = Depends(get_db)):
     try:
         # Получаем пользователя по user_id
         user = db.query(User).filter(User.id == user_id).first()
@@ -733,6 +744,7 @@ async def get_user_content_by_tags_and_tag_id(user_id: int, tag_id: int, db: Ses
 @router.get("/search-documents")
 @limiter.limit("80/minute")  # ✅ Высокий лимит для поиска
 async def search_documents(
+    request: Request,
     user_id: int,
     search_query: str = None,
     db: Session = Depends(get_db)
@@ -783,6 +795,7 @@ async def search_documents(
 @router.post("/create-tag")
 @limiter.limit("20/minute")  # ✅ Умеренный лимит для создания тегов
 async def create_tag(
+    request: Request,
     tag_name: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
@@ -799,6 +812,7 @@ async def create_tag(
 @router.put("/update-tag/{tag_id}")
 @limiter.limit("20/minute")  # ✅ Умеренный лимит для обновления тегов
 async def update_tag(
+    request: Request,
     tag_id: int,
     tag_name: str,
     db: Session = Depends(get_db),
@@ -818,6 +832,7 @@ async def update_tag(
 @router.delete("/delete-tag/{tag_id}")
 @limiter.limit("20/minute")  # ✅ Умеренный лимит для удаления тегов
 async def delete_tag(
+    request: Request,
     tag_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
@@ -838,7 +853,7 @@ async def delete_tag(
 
 @router.get("/list-files/{department_id}")
 @limiter.limit("60/minute")  # ✅ Умеренный лимит для списка файлов
-async def list_department_files(department_id: int):
+async def list_department_files(request: Request, department_id: int):
     """
     Возвращает список файлов в директории отдела.
     """
@@ -891,7 +906,7 @@ async def list_department_files(department_id: int):
 
 @router.delete("/delete-file/{department_id}/{filename}")
 @limiter.limit("20/minute")  # ✅ Умеренный лимит для удаления файлов
-async def delete_department_file(department_id: int, filename: str):
+async def delete_department_file(request: Request, department_id: int, filename: str):
     """
     Удаляет конкретный файл из директории отдела.
     """
@@ -938,7 +953,7 @@ async def delete_department_file(department_id: int, filename: str):
 
 @router.delete("/delete-all-files/{department_id}")
 @limiter.limit("5/minute")  # ✅ Строгий лимит для массового удаления
-async def delete_all_department_files(department_id: int):
+async def delete_all_department_files(request: Request, department_id: int):
     """
     Удаляет все файлы из директории отдела.
     """
@@ -992,7 +1007,7 @@ async def delete_all_department_files(department_id: int):
 
 @router.get("/list-all-departments")
 @limiter.limit("30/minute")  # ✅ Умеренный лимит для списка отделов
-async def list_all_departments():
+async def list_all_departments(request: Request, ):
     """
     Возвращает список всех отделов с файлами.
     """

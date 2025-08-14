@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, status, Request
 import os
 from sqlalchemy.orm import Session
 from database import get_db
@@ -24,6 +24,7 @@ class FeedbackCreate(BaseModel):
 @router.post("/create")
 @limiter.limit("10/minute")  # ✅ Умеренный лимит для создания отзывов
 async def create_feedback(
+    request: Request,
     text: str = Form(...),
     photo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
@@ -73,6 +74,7 @@ async def create_feedback(
 @router.get("/list")
 @limiter.limit("30/minute")  # ✅ Умеренный лимит для получения списка отзывов
 async def get_feedback_list(
+    request: Request,
     db: Session = Depends(get_db),
     current_user = Depends(require_admin),
 ):
@@ -111,6 +113,7 @@ async def get_feedback_list(
 @router.get("/photo/{feedback_id}")
 @limiter.limit("60/minute")  # ✅ Высокий лимит для получения фото
 async def get_feedback_photo(
+    request: Request,
     feedback_id: int, 
     db: Session = Depends(get_db),
     current_user = Depends(require_admin),
@@ -139,6 +142,7 @@ async def get_feedback_photo(
 @router.get("/detail/{feedback_id}")
 @limiter.limit("60/minute")  # ✅ Высокий лимит для получения деталей
 async def get_feedback_detail(
+    request: Request,
     feedback_id: int, 
     db: Session = Depends(get_db),
     current_user = Depends(require_admin),
@@ -181,6 +185,7 @@ async def get_feedback_detail(
 @router.get("/my-feedback")
 @limiter.limit("60/minute")  # ✅ Высокий лимит для получения собственных отзывов
 async def get_my_feedback(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -211,6 +216,7 @@ async def get_my_feedback(
 @router.delete("/{feedback_id}")
 @limiter.limit("20/minute")  # ✅ Умеренный лимит для удаления отзывов
 async def delete_feedback(
+    request: Request,
     feedback_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
