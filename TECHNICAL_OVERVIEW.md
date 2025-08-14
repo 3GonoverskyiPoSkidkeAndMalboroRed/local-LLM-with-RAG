@@ -17,6 +17,13 @@
                     │   ML SDK        │
                     │                 │
                     └─────────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │  Yandex Search  │
+                    │   API v2        │
+                    │                 │
+                    └─────────────────┘
 ```
 
 ### Компоненты системы
@@ -27,23 +34,31 @@
 - **Сборщик**: Vite
 - **Стилизация**: Bootstrap 5 + Custom CSS
 - **HTTP клиент**: Axios
+- **Роутинг**: Vue Router
+- **Состояние**: Vuex Store
 
 #### Backend (FastAPI)
 - **Фреймворк**: FastAPI (Python)
 - **ORM**: SQLAlchemy
 - **Аутентификация**: JWT токены
-- **Валидация**: Pydantic
+- **Валидация**: Pydantic с поддержкой Optional типов
 - **Асинхронность**: asyncio
+- **Кэширование**: Локальное хранение эмбеддингов
 
 #### База данных (MySQL)
 - **СУБД**: MySQL 8.0
 - **Миграции**: Alembic
 - **Пулинг соединений**: SQLAlchemy Engine
+- **Иерархическая система прав доступа**
 
 #### ИИ-сервисы
 - **Провайдер**: Yandex Cloud ML SDK
-- **Модели**: YandexGPT для генерации, text-search-doc для эмбеддингов
-- **Векторная БД**: Локальное хранение в JSON формате
+- **Модели**: 
+  - YandexGPT для генерации текста
+  - text-search-doc для эмбеддингов
+  - search_api.generative для веб-поиска
+- **RAG система**: Retrieval-Augmented Generation
+- **Веб-поиск**: Интеграция с Yandex Search API v2
 
 ## Структура базы данных
 
@@ -101,243 +116,171 @@ CREATE TABLE tags (
 );
 ```
 
-#### RAG система
-```sql
--- Чанки документов для RAG
-CREATE TABLE document_chunks (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    content_id INT NOT NULL,
-    department_id INT NOT NULL,
-    chunk_text TEXT NOT NULL,
-    chunk_index INT NOT NULL,
-    embedding_vector JSON,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (content_id) REFERENCES content(id) ON DELETE CASCADE,
-    FOREIGN KEY (department_id) REFERENCES department(id) ON DELETE CASCADE
-);
-
--- Сессии RAG
-CREATE TABLE rag_sessions (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    department_id INT NOT NULL,
-    is_initialized BOOLEAN DEFAULT FALSE,
-    documents_count INT DEFAULT 0,
-    chunks_count INT DEFAULT 0,
-    last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (department_id) REFERENCES department(id) ON DELETE CASCADE
-);
-```
-
 ## API Endpoints
 
 ### Аутентификация
 - `POST /auth/login` - Вход в систему
-- `POST /auth/logout` - Выход из системы
-- `GET /auth/me` - Информация о текущем пользователе
+- `POST /auth/register` - Регистрация (только админы)
+- `GET /auth/me` - Получение информации о текущем пользователе
 
-### Управление документами
-- `GET /api/departments` - Список отделов
-- `GET /api/access_levels` - Уровни доступа
-- `POST /upload-files` - Загрузка файлов
-- `GET /search-documents` - Поиск документов
+### Контент
+- `GET /content/all` - Получение всего контента (только админы)
+- `GET /content/{content_id}` - Получение контента по ID
+- `PUT /content/{content_id}` - Обновление контента
+- `DELETE /content/{content_id}` - Удаление контента
+- `POST /content/upload` - Загрузка файлов
+- `GET /content/download-file/{content_id}` - Скачивание файла
+- `GET /content/public-download/{content_id}` - Публичное скачивание с токеном
+- `GET /content/download-token/{content_id}` - Генерация токена для скачивания
 
-### ИИ-ассистент
-- `POST /api/yandex-ai/generate` - Генерация текста
-- `POST /api/yandex-ai/chat` - Чат с ИИ
+### Библиотека документов
+- `GET /user/{user_id}/content/by-tags` - Получение контента по тегам
+- `GET /content/user/{user_id}/content/by-tags/{tag_id}` - Контент конкретного тега
+- `GET /content/search-documents` - Поиск документов
+
+### Чат и ИИ
+- `POST /chat/simple` - Простой чат с YandexGPT
+- `POST /chat/rag` - Чат с RAG системой
+- `POST /web-search` - Веб-поиск с генеративным ответом
+- `POST /chat/hybrid-rag` - Гибридный RAG + веб-поиск
+
+### Администрирование
+- `GET /departments` - Список отделов
+- `GET /tags` - Список тегов
+- `GET /users` - Список пользователей (только админы)
+
+## Система прав доступа
+
+### Иерархическая модель
+Система использует иерархическую модель прав доступа:
+
+1. **Администраторы** (`role_id = 1`) - полный доступ ко всем ресурсам
+2. **Пользователи** - доступ только к контенту своего отдела и уровня доступа
+
+### Принципы доступа
+- `Content.access_level <= user.access_id` - пользователь может видеть контент своего уровня и ниже
+- `Content.department_id == user.department_id` - пользователь видит только контент своего отдела
+- Администраторы имеют доступ ко всему контенту
+
+## Интеграция с Yandex Cloud
+
+### Конфигурация
+```python
+# Переменные окружения
+YANDEX_API_KEY=your_api_key
+YANDEX_FOLDER_ID=your_folder_id
+SEARCH_API_API_KEY=your_search_api_key
+SEARCH_API_IAM_TOKEN=your_iam_token
+```
+
+### Сервисы
+1. **YandexGPT** - генерация текста
+2. **Embeddings** - создание векторных представлений
+3. **Search API** - веб-поиск с генеративными ответами
 
 ### RAG система
-- `POST /api/yandex-rag/initialize` - Инициализация RAG
-- `GET /api/yandex-rag/status/{department_id}` - Статус RAG
-- `POST /api/yandex-rag/query` - RAG запрос
-- `DELETE /api/yandex-rag/reset/{department_id}` - Сброс RAG
+1. Загрузка документов и создание эмбеддингов
+2. Хранение в локальном JSON кэше
+3. Поиск релевантных фрагментов
+4. Генерация ответа на основе найденного контекста
 
-### Тестирование
-- `GET /quizzes` - Список тестов
-- `POST /quizzes/{quiz_id}/attempt` - Начать тест
-- `POST /quizzes/submit` - Отправить ответы
+## Функциональность чата
+
+### Режимы работы
+1. **Простой чат** - прямая генерация с YandexGPT
+2. **RAG чат** - поиск в базе знаний + генерация
+3. **Веб-поиск** - поиск в интернете + генерация
+4. **Гибридный RAG** - комбинация RAG + веб-поиск
+
+### Подрежимы
+- **Обычная генерация** - стандартный режим
+- **Поиск в интернете** - с использованием Yandex Search API
+
+## Система файлов
+
+### Загрузка
+- Поддержка множественных форматов (PDF, DOC, DOCX, TXT)
+- Автоматическое определение MIME-типов
+- Валидация размера файлов
+
+### Скачивание
+- Защищенное скачивание с проверкой прав
+- Публичные ссылки с временными токенами
+- Правильная обработка кириллических имен файлов
 
 ## Безопасность
 
-### Аутентификация и авторизация
-- **Хеширование паролей**: bcrypt
-- **Сессии**: JWT токены
-- **Контроль доступа**: Role-based access control (RBAC)
-- **Валидация**: Pydantic модели для всех входных данных
+### Аутентификация
+- JWT токены с временем жизни
+- Хеширование паролей (bcrypt)
+- Защита от брутфорс атак
 
-### Защита данных
-- **SQL инъекции**: Защита через ORM (SQLAlchemy)
-- **XSS**: Санитизация входных данных
-- **CSRF**: CORS политики
-- **Файловая безопасность**: Проверка типов и размеров файлов
+### Авторизация
+- Проверка прав на уровне эндпоинтов
+- Валидация входных данных (Pydantic)
+- Защита от SQL-инъекций (SQLAlchemy ORM)
 
-## Производительность
-
-### Оптимизации базы данных
-- **Индексы**: На часто используемых полях (department_id, access_level)
-- **Пулинг соединений**: SQLAlchemy connection pooling
-- **Кеширование**: Redis для часто запрашиваемых данных (опционально)
-
-### Оптимизации RAG
-- **Векторные операции**: NumPy для быстрых вычислений
-- **Батчинг**: Обработка эмбеддингов группами
-- **Кеширование**: Локальное хранение векторных индексов
-
-### Frontend оптимизации
-- **Lazy loading**: Компоненты загружаются по требованию
-- **Минификация**: Vite автоматически минифицирует код
-- **Кеширование**: HTTP кеширование статических ресурсов
+### Файловая безопасность
+- Проверка расширений файлов
+- Изоляция файлов по отделам
+- Временные токены для публичного доступа
 
 ## Мониторинг и логирование
 
 ### Логирование
-```python
-# Настройка логирования
-import logging
+- Структурированные логи FastAPI
+- Логирование ошибок на фронтенде
+- Отслеживание производительности
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('app.log'),
-        logging.StreamHandler()
-    ]
-)
-```
-
-### Метрики
-- **Время отклика API**: Middleware для измерения времени
-- **Использование ресурсов**: CPU, память, дисковое пространство
-- **Ошибки**: Количество и типы ошибок
-- **Пользовательская активность**: Количество запросов, популярные функции
+### Обработка ошибок
+- Централизованная обработка исключений
+- Пользовательские сообщения об ошибках
+- Graceful degradation при сбоях сервисов
 
 ## Развертывание
 
-### Docker контейнеры
+### Docker Compose
 ```yaml
-# docker-compose.yml
-version: '3.8'
 services:
   backend:
     build: ./server
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8082}:8000"
     environment:
-      - DATABASE_URL=mysql+mysqlconnector://root:password@db:3306/db_test
+      - DATABASE_URL=mysql://user:password@db:3306/database
       - YANDEX_API_KEY=${YANDEX_API_KEY}
       - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
-    
+  
   frontend:
     build: ./vite-soft-ui-dashboard-main
     ports:
-      - "3000:80"
-    
+      - "${FRONTEND_PORT:-8081}:80"
+  
   db:
     image: mysql:8.0
-    environment:
-      - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_DATABASE=db_test
-    volumes:
-      - mysql_data:/var/lib/mysql
-
-volumes:
-  mysql_data:
+    ports:
+      - "${DB_PORT:-3306}:3306"
 ```
 
 ### Переменные окружения
-```bash
-# Backend
-DATABASE_URL=mysql+mysqlconnector://user:password@host:port/database
-YANDEX_API_KEY=your_yandex_api_key
-YANDEX_FOLDER_ID=your_yandex_folder_id
-JWT_SECRET_KEY=your_jwt_secret
+- `BACKEND_PORT` - порт бэкенда (по умолчанию 8082)
+- `FRONTEND_PORT` - порт фронтенда (по умолчанию 8081)
+- `DB_PORT` - порт базы данных (по умолчанию 3306)
+- `YANDEX_API_KEY` - ключ API Yandex Cloud
+- `YANDEX_FOLDER_ID` - ID папки в Yandex Cloud
+- `SEARCH_API_API_KEY` - ключ для Yandex Search API
+- `SEARCH_API_IAM_TOKEN` - IAM токен для Search API
 
-# Frontend
-VITE_API_URL=http://localhost:8000
-```
+## Производительность
 
-## Масштабирование
+### Оптимизации
+- Кэширование эмбеддингов в JSON
+- Асинхронная обработка запросов
+- Ленивая загрузка документов
+- Сжатие ответов
 
-### Горизонтальное масштабирование
-- **Load Balancer**: Nginx для распределения нагрузки
-- **Микросервисы**: Разделение на отдельные сервисы (Auth, Documents, AI)
-- **Кеширование**: Redis для сессий и часто используемых данных
-
-### Вертикальное масштабирование
-- **CPU**: Увеличение количества ядер для обработки ИИ запросов
-- **RAM**: Больше памяти для векторных операций
-- **Storage**: SSD для быстрого доступа к документам
-
-## Резервное копирование
-
-### Стратегия бэкапов
-```bash
-# Ежедневный бэкап базы данных
-mysqldump -u root -p db_test > backup_$(date +%Y%m%d).sql
-
-# Бэкап файлов
-tar -czf files_backup_$(date +%Y%m%d).tar.gz /app/files/
-
-# Бэкап векторных индексов
-tar -czf vector_backup_$(date +%Y%m%d).tar.gz /app/files/vector_db/
-```
-
-### Восстановление
-```bash
-# Восстановление БД
-mysql -u root -p db_test < backup_20240101.sql
-
-# Восстановление файлов
-tar -xzf files_backup_20240101.tar.gz -C /
-```
-
-## Troubleshooting
-
-### Частые проблемы
-
-**Проблема**: Медленные RAG запросы
-**Диагностика**: 
-```python
-import time
-start_time = time.time()
-# RAG операция
-end_time = time.time()
-print(f"RAG query took {end_time - start_time} seconds")
-```
-
-**Проблема**: Ошибки подключения к БД
-**Диагностика**:
-```python
-from sqlalchemy import create_engine
-engine = create_engine(DATABASE_URL)
-try:
-    connection = engine.connect()
-    print("Database connection successful")
-except Exception as e:
-    print(f"Database connection failed: {e}")
-```
-
-**Проблема**: Ошибки Yandex API
-**Диагностика**:
-```python
-import logging
-logger = logging.getLogger(__name__)
-
-try:
-    response = await yandex_client.generate(prompt)
-except Exception as e:
-    logger.error(f"Yandex API error: {e}")
-    # Fallback logic
-```
-
-## Контакты разработчиков
-
-**Backend**: backend-team@company.com
-**Frontend**: frontend-team@company.com
-**DevOps**: devops-team@company.com
-**Архитектор**: architect@company.com
-
----
-
-*Документ обновлен: [дата]*
-*Версия системы: 2.0*
+### Масштабируемость
+- Микросервисная архитектура
+- Контейнеризация с Docker
+- Горизонтальное масштабирование готово
+- Балансировка нагрузки через Nginx
