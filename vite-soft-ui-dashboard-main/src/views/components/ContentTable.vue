@@ -15,7 +15,7 @@
               <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Отдел</th>
               <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Уровень доступа</th>
               <th v-if="isAdmin" class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Доступность</th>
-              <th class="text-secondary opacity-7">Действия</th>
+              <th class="text-center text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Действия</th>
             </tr>
           </thead>
           <tbody>
