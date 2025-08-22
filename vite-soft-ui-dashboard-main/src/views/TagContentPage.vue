@@ -211,7 +211,6 @@ export default {
           // Получаем документы по ID тега с использованием нового эндпоинта
           response = await axiosInstance.get(`/content/user/${this.userId}/content/by-tags/${this.tagId}`);
           this.documents = response.data;
-          console.log('Получены документы по тегу:', this.documents);
         }
         
         this.loading = false;

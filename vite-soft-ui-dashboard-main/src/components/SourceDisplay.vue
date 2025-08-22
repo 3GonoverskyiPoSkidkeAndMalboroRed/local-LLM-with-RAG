@@ -117,7 +117,6 @@ export default {
       const uniqueMap = new Map();
       const contentHashMap = new Map(); // Для отслеживания дубликатов по содержимому
       
-      console.log(`🔍 Обработка ${this.sources.length} источников для дедупликации`);
       
       this.sources.forEach((source, index) => {
         if (!source.chunk_id) {
@@ -137,15 +136,11 @@ export default {
           if (!contentHashMap.has(contentKey)) {
             uniqueMap.set(source.chunk_id, source);
             contentHashMap.set(contentKey, source.chunk_id);
-            console.log(`✅ Добавлен уникальный источник: ${fileName} (${source.chunk_id})`);
           } else {
             // Если нашли дубликат по содержимому, проверяем, какой источник лучше
             const existingChunkId = contentHashMap.get(contentKey);
             const existingSource = uniqueMap.get(existingChunkId);
             
-            console.log(`🔄 Найден дубликат по содержимому: ${fileName}`);
-            console.log(`   Существующий: ${existingSource.chunk_id} (релевантность: ${existingSource.similarity_score})`);
-            console.log(`   Новый: ${source.chunk_id} (релевантность: ${source.similarity_score})`);
             
             // Предпочитаем источник с более высокой релевантностью
             if (source.similarity_score && existingSource.similarity_score) {
@@ -154,27 +149,21 @@ export default {
                 uniqueMap.delete(existingChunkId);
                 uniqueMap.set(source.chunk_id, source);
                 contentHashMap.set(contentKey, source.chunk_id);
-                console.log(`   ✅ Заменен на более релевантный: ${source.chunk_id}`);
               } else {
-                console.log(`   ❌ Оставлен существующий: ${existingChunkId}`);
               }
             } else if (source.similarity_score && !existingSource.similarity_score) {
               // Предпочитаем источник с релевантностью
               uniqueMap.delete(existingChunkId);
               uniqueMap.set(source.chunk_id, source);
               contentHashMap.set(contentKey, source.chunk_id);
-              console.log(`   ✅ Заменен на источник с релевантностью: ${source.chunk_id}`);
             } else {
-              console.log(`   ❌ Оставлен существующий: ${existingChunkId}`);
             }
           }
         } else {
-          console.log(`⚠️ Дубликат chunk_id: ${source.chunk_id} для файла ${fileName}`);
         }
       });
       
       const result = Array.from(uniqueMap.values());
-      console.log(`📊 Результат дедупликации: ${result.length} уникальных источников из ${this.sources.length} исходных`);
       
       return result;
     }

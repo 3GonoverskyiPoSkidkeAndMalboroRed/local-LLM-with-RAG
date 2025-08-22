@@ -49,7 +49,6 @@ axiosInstance.interceptors.request.use(
     
     // Логируем запрос в консоль в режиме разработки
     if (import.meta.env.DEV) {
-      console.log(`🚀 Запрос: ${config.method?.toUpperCase()} ${config.url}`, config);
     }
     
     return config;
@@ -65,7 +64,6 @@ axiosInstance.interceptors.response.use(
   response => {
     // Логируем успешный ответ в режиме разработки
     if (import.meta.env.DEV) {
-      console.log(`✅ Ответ: ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
     }
     
     // Очищаем информацию о повторных попытках для этого запроса
@@ -159,7 +157,6 @@ const cacheAdapter = () => {
     
     if (cachedData) {
       // Используем кэшированные данные
-      console.log(`📦 Используются кэшированные данные для ${config.url}`);
       return Promise.resolve(cachedData);
     }
     

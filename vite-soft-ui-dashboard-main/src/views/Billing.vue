@@ -211,7 +211,6 @@ export default {
         }, 4000);
         
         // Логируем для отладки
-        console.log(`Уведомление: ${notification.type} - ${notification.message}`);
       } catch (error) {
         console.error('Ошибка при показе уведомления:', error);
         // Fallback - простой alert
@@ -256,7 +255,6 @@ export default {
     async processHybridRAG(message, departmentId) {
       try {
         // 1. RAG запрос - получаем информацию из документов
-        console.log("Выполняем RAG запрос...");
         const ragResponse = await axios.post(`${import.meta.env.VITE_API_URL}/api/yandex-rag/query`, { 
           department_id: parseInt(departmentId),
           question: message
@@ -270,7 +268,6 @@ export default {
         const noSourcesFound = ragData.no_sources_found || false;
         
         // 2. Веб-поиск - получаем актуальную информацию из интернета
-        console.log("Выполняем веб-поиск...");
         const webResponse = await axios.post(`${import.meta.env.VITE_API_URL}/api/web-search/query`, {
           query: message
         }, {
@@ -283,7 +280,6 @@ export default {
           : 'Информация из интернета не найдена.';
         
         // 3. Объединяем и анализируем информацию через ИИ
-        console.log("Объединяем и анализируем информацию...");
         const combinedPrompt = `
 Запрос пользователя: "${message}"
 
@@ -393,10 +389,7 @@ ${ragSources.map((source, index) => `${index + 1}. ${source.title || source.file
         return; // Прекращаем выполнение, если departmentId отсутствует
       }
       
-      console.log("Отправляемые данные:", {
-        question: this.userMessage,
-        department_id: departmentId
-      });
+
       
       // Добавляем сообщение пользователя в чат
       let userContent = this.userMessage;

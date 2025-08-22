@@ -87,13 +87,11 @@ export default {
       description: this.value || '',
       file_path: this.percentage || ''
     };
-    console.log('Initial content:', this.content);
   },
   methods: {
     async fetchContent() {
       try {
         const response = await axios.get(`${import.meta.env.VITE_API_URL}/user/${this.userId}/content`);
-        console.log('Response data:', response.data);
         
         // Проверяем, является ли response.data массивом
         if (Array.isArray(response.data) && response.data.length > 0) {
@@ -113,14 +111,12 @@ export default {
           };
         }
         
-        console.log('Updated content:', this.content);
       } catch (error) {
         console.error('Ошибка при получении контента:', error);
       }
     },
     openDocument() {
       const documentUrl = this.content.file_path; // Предполагаем, что file_path содержит URL документа
-      console.log('Opening document URL:', documentUrl); // Логируем URL
       if (documentUrl) {
         window.open(documentUrl, '_blank'); // Открывает документ в новой вкладке
       } else {

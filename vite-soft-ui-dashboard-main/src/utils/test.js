@@ -102,7 +102,6 @@ function testEndpoint(token, endpoint, method = 'GET', data = null) {
   
   if (!success) {
     endpointErrors.add(1);
-    console.log(`Ошибка при запросе к ${url}: ${response.status} ${response.body}`);
   }
   
   return response;
@@ -183,12 +182,10 @@ export default function() {
 
 // Функция для выполнения перед началом теста
 export function setup() {
-  console.log('Начало тестирования API эндпоинтов через Nginx');
   return { startTime: new Date() };
 }
 
 // Функция для выполнения после завершения теста
 export function teardown(data) {
   const testDuration = (new Date() - data.startTime) / 1000;
-  console.log(`Тест завершен. Продолжительность: ${testDuration} секунд`);
 }

@@ -130,7 +130,6 @@ export const createCachedFunction = (fn, keyPrefix, ttl = DEFAULT_TTL) => {
     // Проверяем, есть ли данные в кэше
     const cachedData = getCacheItem(cacheKey);
     if (cachedData !== null) {
-      console.log(`📦 Используются кэшированные данные для ${keyPrefix}`);
       return cachedData;
     }
     
