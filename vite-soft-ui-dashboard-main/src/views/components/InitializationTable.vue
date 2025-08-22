@@ -425,7 +425,6 @@ export default {
         }
         
         // Отладочный вывод
-        console.log('Отправляемые данные на эндпоинт /create, путь директории:', dirPath);
         
         // Используем параметры запроса вместо JSON-тела
         const response = await axios.post(`${import.meta.env.VITE_API_URL}/directory/create?directory_path=${encodeURIComponent(dirPath)}`);
@@ -490,8 +489,7 @@ export default {
         // Добавляем параметры к URL
         url += '?' + params.toString();
         
-        console.log('Отправка запроса на URL:', url);
-        console.log('ID отдела:', this.uploadForm.departmentId);
+
         
         // Отправляем запрос на сервер
         const response = await axios.post(

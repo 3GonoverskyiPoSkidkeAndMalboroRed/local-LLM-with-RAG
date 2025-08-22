@@ -293,11 +293,9 @@ export default {
         this.contentData = response.data;
 
         // Отладка: выводим полученные данные о контенте
-        console.log('Полученные данные о контенте:', this.contentData);
 
         // Выводим информацию о каждом документе
         this.contentData.untagged_content.forEach(doc => {
-          console.log(`Документ: ${doc.title}, Описание: ${doc.description}, Путь к файлу: ${doc.file_path}, Имя файла: ${this.getFileName(doc.file_path)}`);
         });
 
         this.loading = false;

@@ -786,13 +786,11 @@ export default {
     
     // Получение списка моделей LLM (больше не используется)
     async fetchLLMModels() {
-      console.log('Функция fetchLLMModels больше не используется. Используйте Yandex RAG систему.');
       this.llmModels = [];
     },
     
     // Получение списка моделей эмбеддингов (больше не используется)
     async fetchEmbeddingModels() {
-      console.log('Функция fetchEmbeddingModels больше не используется. Используйте Yandex RAG систему.');
       this.embeddingModels = [];
     },
     

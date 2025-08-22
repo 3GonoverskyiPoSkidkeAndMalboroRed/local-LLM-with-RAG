@@ -183,7 +183,6 @@ export default {
           access_id: 3
         });
         
-        console.log("Успешная регистрация:", response.data);
         
         // Перенаправляем на страницу входа
         this.router.push("/sign-in");
