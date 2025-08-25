@@ -7,6 +7,7 @@ from sqlalchemy import func
 from database import get_db, SessionLocal
 from models_db import Content, Department, DocumentChunk, RAGSession
 from yandex_ai_service import YandexAIService
+from utils.image_extractor import ImageExtractor
 import PyPDF2
 import docx
 from io import BytesIO
@@ -17,6 +18,7 @@ from openpyxl import load_workbook
 class YandexRAGService:
     def __init__(self):
         self.yandex_ai = YandexAIService()
+        self.image_extractor = ImageExtractor()
         # Увеличиваем размер чанка для лучшего качества RAG
         self.chunk_size = int(os.getenv('RAG_CHUNK_SIZE', '2000'))  # Размер чанка в символах
         self.chunk_overlap = int(os.getenv('RAG_CHUNK_OVERLAP', '400'))  # Перекрытие между чанками
@@ -81,13 +83,21 @@ class YandexRAGService:
                         # Получаем эмбеддинг от Yandex
                         embedding = await self.yandex_ai.get_embedding(chunk_text)
                         
+                        # Извлекаем изображения для чанка
+                        images = self.image_extractor.get_images_for_chunk(
+                            content_id=document.id,
+                            department_id=department_id,
+                            chunk_text=chunk_text
+                        )
+                        
                         # Сохраняем чанк в БД
                         chunk = DocumentChunk(
                             content_id=document.id,
                             department_id=department_id,
                             chunk_text=chunk_text,
                             chunk_index=i,
-                            embedding_vector=embedding
+                            embedding_vector=embedding,
+                            images=images if images else None
                         )
                         db.add(chunk)
                         total_chunks += 1
@@ -264,16 +274,25 @@ class YandexRAGService:
                         
                         # Добавляем только уникальные источники
                         if source_key not in unique_sources and content_key not in seen_content:
+                            # Получаем изображения для чанка
+                            chunk_images = []
+                            if chunk.images:
+                                try:
+                                    chunk_images = json.loads(chunk.images) if isinstance(chunk.images, str) else chunk.images
+                                except:
+                                    chunk_images = []
+                            
                             unique_sources[source_key] = {
                                 "chunk_id": source_key,
                                 "file_name": content.title,
                                 "file_path": content.file_path,
                                 "chunk_content": chunk.chunk_text,
                                 "similarity_score": round(similarity, 3),
-                                "page_number": None  # Можно добавить позже
+                                "page_number": None,  # Можно добавить позже
+                                "images": chunk_images
                             }
                             seen_content.add(content_key)
-                            print(f"RAG: Добавлен источник: {content.title} (релевантность: {similarity:.3f})")
+                            print(f"RAG: Добавлен источник: {content.title} (релевантность: {similarity:.3f}, изображений: {len(chunk_images)})")
                         else:
                             print(f"RAG: Пропущен дубликат: {content.title}")
             
@@ -291,6 +310,10 @@ class YandexRAGService:
             
             # Формируем промпт с контекстом
             context = "\n\n".join(context_parts)
+            
+            # Подсчитываем общее количество изображений в источниках
+            total_images = sum(len(source.get("images", [])) for source in sources)
+            
             prompt = f"""Ты — профессиональный ассистент, который помогает пользователям найти точную информацию в корпоративных документах.
 
 ### КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА (НЕ НАРУШАТЬ):
@@ -312,6 +335,7 @@ class YandexRAGService:
 14. Если информация есть, но не относится к основной теме документов - скажи об этом
 15. Если нашел частичную информацию - опиши её, даже если она неполная
 16. Всегда анализируй контекст вокруг найденных слов
+17. Если в документах есть изображения ({total_images} изображений найдено) - обязательно упомяни об этом в ответе
 
 ### Контекст из документов:
 {context}

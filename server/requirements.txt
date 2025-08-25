@@ -185,4 +185,5 @@ zipp
 PyJWT
 yandexcloud
 yandex-cloud-ml-sdk
-slowapi>=0.1.9 
+slowapi>=0.1.9
+PyMuPDF 

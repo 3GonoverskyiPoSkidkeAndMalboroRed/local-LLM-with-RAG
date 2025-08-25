@@ -11,6 +11,9 @@
           <small class="text-muted ms-2">
             <i class="fas fa-star text-success"></i> Первый источник — основной
           </small>
+          <span v-if="totalImages > 0" class="badge bg-warning ms-2">
+            <i class="fas fa-images"></i> {{ totalImages }} изображений
+          </span>
         </h6>
       </div>
       <div class="card-body">
@@ -46,6 +49,13 @@
                   <p class="text-muted mb-2">
                     {{ getPreviewText(source.chunk_content) }}
                   </p>
+                  
+                  <!-- Отображение изображений для источника -->
+                  <ImageDisplay 
+                    v-if="source.images && source.images.length > 0"
+                    :images="source.images"
+                    @show-notification="$emit('show-notification', $event)"
+                  />
                   
                   <div class="btn-group" role="group">
                     <button 
@@ -94,8 +104,13 @@
 </template>
 
 <script>
+import ImageDisplay from './ImageDisplay.vue'
+
 export default {
   name: 'SourceDisplay',
+  components: {
+    ImageDisplay
+  },
   props: {
     sources: {
       type: Array,
@@ -166,6 +181,12 @@ export default {
       const result = Array.from(uniqueMap.values());
       
       return result;
+    },
+    
+    totalImages() {
+      return this.uniqueSources.reduce((total, source) => {
+        return total + (source.images ? source.images.length : 0);
+      }, 0);
     }
   },
   methods: {

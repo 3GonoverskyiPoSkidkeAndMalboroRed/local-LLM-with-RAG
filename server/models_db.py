@@ -146,6 +146,7 @@ class DocumentChunk(Base):
     chunk_text = Column(Text, nullable=False)  # Текст чанка
     chunk_index = Column(Integer, nullable=False)  # Порядковый номер чанка в документе
     embedding_vector = Column(JSON, nullable=True)  # Вектор эмбеддинга в формате JSON
+    images = Column(JSON, nullable=True)  # Список изображений в чанке в формате JSON
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, onupdate=func.now())
     
