@@ -66,8 +66,18 @@
             </div>
             
             <!-- Чат -->
-            <div class="chat-container mb-4" style="height: 400px; overflow-y: auto; border: 1px solid #eee; border-radius: 10px; padding: 15px;">
-              <div v-for="(message, index) in chatMessages" :key="index" class="mb-3">
+            <div class="position-relative">
+              <div 
+                ref="chatContainer"
+                class="chat-container mb-4" 
+                :style="{ 
+                  height: chatHeight + 'px', 
+                  minHeight: '400px',
+                  maxHeight: '600px'
+                }"
+                style="overflow-y: auto; border: 1px solid #eee; border-radius: 10px; padding: 15px; transition: height 0.3s ease;"
+              >
+              <div v-for="(message, index) in chatMessages" :key="index" class="mb-3 message-item">
                 <div :class="message.role === 'user' ? 'text-end' : 'text-start'">
                   <div 
                     :class="[
@@ -92,12 +102,24 @@
                   </div>
                 </div>
               </div>
-              <div v-if="isLoading" class="text-center">
+              <div v-if="isLoading" class="text-center loading-indicator">
                 <div class="spinner-border text-primary" role="status">
                   <span class="visually-hidden">Загрузка...</span>
                 </div>
               </div>
             </div>
+            
+            <!-- Кнопка прокрутки к последнему сообщению -->
+            <div v-if="!autoScroll && chatMessages.length > 0" class="scroll-to-bottom-btn">
+              <button 
+                @click="scrollToBottom(true)" 
+                class="btn btn-primary btn-sm rounded-circle"
+                title="Перейти к последнему сообщению"
+              >
+                <i class="fas fa-arrow-down"></i>
+              </button>
+            </div>
+          </div>
             
             <!-- Форма ввода -->
             <div class="row">
@@ -161,10 +183,90 @@ export default {
       requestTimeout: null, // Таймер для отмены запроса
       lastRequestTime: 0, // Время последнего запроса
       selectedSourceForModal: null, // Выбранный источник для модального окна
-      selectedSourceIsMain: false // Флаг, указывающий, является ли выбранный источник основным
+      selectedSourceIsMain: false, // Флаг, указывающий, является ли выбранный источник основным
+      chatHeight: 400, // Текущая высота чата
+      autoScroll: true // Флаг для автоматической прокрутки
     };
   },
   methods: {
+    // Метод для автоматического расширения высоты чата
+    adjustChatHeight() {
+      this.$nextTick(() => {
+        const container = this.$refs.chatContainer;
+        if (container) {
+          const contentHeight = container.scrollHeight;
+          const viewportHeight = window.innerHeight;
+          const maxHeight = Math.min(600, viewportHeight * 0.7);
+          const minHeight = 400;
+          
+          // Рассчитываем оптимальную высоту
+          let optimalHeight = Math.max(minHeight, contentHeight + 50);
+          optimalHeight = Math.min(maxHeight, optimalHeight);
+          
+          this.chatHeight = optimalHeight;
+        }
+      });
+    },
+    
+    // Улучшенный метод прокрутки к последнему сообщению
+    scrollToBottom(smooth = true) {
+      this.$nextTick(() => {
+        const container = this.$refs.chatContainer;
+        if (container && this.autoScroll) {
+          if (smooth) {
+            container.scrollTo({
+              top: container.scrollHeight,
+              behavior: 'smooth'
+            });
+          } else {
+            container.scrollTop = container.scrollHeight;
+          }
+        }
+      });
+    },
+    
+    // Метод для прокрутки к конкретному сообщению
+    scrollToMessage(messageIndex) {
+      this.$nextTick(() => {
+        const container = this.$refs.chatContainer;
+        const messageElements = container?.querySelectorAll('.message-item');
+        
+        if (container && messageElements && messageElements[messageIndex]) {
+          const targetElement = messageElements[messageIndex];
+          const containerRect = container.getBoundingClientRect();
+          const targetRect = targetElement.getBoundingClientRect();
+          
+          const scrollTop = container.scrollTop + (targetRect.top - containerRect.top) - 20;
+          
+          container.scrollTo({
+            top: scrollTop,
+            behavior: 'smooth'
+          });
+        }
+      });
+    },
+    
+    // Обработчик прокрутки для определения, когда пользователь прокручивает вверх
+    handleScroll() {
+      const container = this.$refs.chatContainer;
+      if (container) {
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10;
+        
+        // Если пользователь прокрутил вверх, отключаем автоматическую прокрутку
+        if (!isAtBottom) {
+          this.autoScroll = false;
+        } else {
+          this.autoScroll = true;
+        }
+      }
+    },
+    
+    // Обработчик изменения размера окна
+    handleResize() {
+      this.adjustChatHeight();
+    },
+    
     formatMessage(text) {
       if (!text) return '';
       // Заменяем \n на <br> для сохранения переносов строк
@@ -404,6 +506,10 @@ ${ragSources.map((source, index) => `${index + 1}. ${source.title || source.file
         content: userContent
       });
       
+      // Расширяем чат и прокручиваем к новому сообщению
+      this.adjustChatHeight();
+      this.scrollToBottom();
+      
       const message = this.userMessage;
       this.userMessage = "";
       this.isLoading = true;
@@ -558,13 +664,9 @@ ${ragSources.map((source, index) => `${index + 1}. ${source.title || source.file
         this.isLoading = false;
         this.requestInProgress = false;
         
-        // Прокручиваем чат вниз
-        this.$nextTick(() => {
-          const chatContainer = document.querySelector('.chat-container');
-          if (chatContainer) {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-          }
-        });
+        // Расширяем чат и прокручиваем к ответу
+        this.adjustChatHeight();
+        this.scrollToBottom(true);
       }
     }
   },
@@ -574,6 +676,43 @@ ${ragSources.map((source, index) => `${index + 1}. ${source.title || source.file
       role: 'assistant',
       content: 'Здравствуйте! Я ваш ИИ-ассистент. Как я могу вам помочь сегодня?'
     });
+    
+    // Настраиваем чат после монтирования
+    this.$nextTick(() => {
+      this.adjustChatHeight();
+      this.scrollToBottom();
+      
+      // Добавляем обработчик прокрутки для определения, когда пользователь прокручивает вверх
+      const container = this.$refs.chatContainer;
+      if (container) {
+        container.addEventListener('scroll', this.handleScroll);
+      }
+      
+      // Добавляем обработчик изменения размера окна
+      window.addEventListener('resize', this.handleResize);
+    });
+  },
+  
+  beforeUnmount() {
+    // Удаляем обработчик прокрутки
+    const container = this.$refs.chatContainer;
+    if (container) {
+      container.removeEventListener('scroll', this.handleScroll);
+    }
+    
+    // Удаляем обработчик изменения размера окна
+    window.removeEventListener('resize', this.handleResize);
+  },
+  watch: {
+    // Автоматически расширяем чат при добавлении новых сообщений
+    chatMessages: {
+      handler() {
+        this.$nextTick(() => {
+          this.adjustChatHeight();
+        });
+      },
+      deep: true
+    }
   },
   created() {
     const isAuthenticated = localStorage.getItem("isAuthenticated");
@@ -642,5 +781,69 @@ ${ragSources.map((source, index) => `${index + 1}. ${source.title || source.file
 
 .chat-mode-block:has(.form-check-input:checked) .fas {
   color: #007bff;
+}
+
+/* Стили для сообщений чата */
+.message-item {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.loading-indicator {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Анимации */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Улучшенные стили для контейнера чата */
+.chat-container {
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e9ecef !important;
+}
+
+.chat-container:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Стили для кнопки прокрутки к последнему сообщению */
+.scroll-to-bottom-btn {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.scroll-to-bottom-btn .btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.scroll-to-bottom-btn .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
 }
 </style>
