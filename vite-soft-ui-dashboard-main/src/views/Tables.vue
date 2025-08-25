@@ -90,56 +90,160 @@
               
               <!-- Вкладка загрузки контента -->
               <div class="tab-pane fade" id="upload" role="tabpanel" aria-labelledby="upload-tab">
-                <form @submit.prevent="uploadContent">
-                  <div class="row">
-                    <div class="col-md-6 mb-3">
-                      <label for="title" class="form-label">Название</label>
-                      <input type="text" class="form-control" id="title" v-model="contentForm.title" required>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label for="description" class="form-label">Описание</label>
-                      <textarea class="form-control" id="description" rows="3" v-model="contentForm.description" required></textarea>
-                    </div>
+                <ul class="nav nav-pills mb-3" id="uploadTabs" role="tablist">
+                  <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="single-upload-tab" data-bs-toggle="pill" data-bs-target="#single-upload" type="button" role="tab" aria-controls="single-upload" aria-selected="true">Одиночная загрузка</button>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="batch-upload-tab" data-bs-toggle="pill" data-bs-target="#batch-upload" type="button" role="tab" aria-controls="batch-upload" aria-selected="false">Пакетная загрузка</button>
+                  </li>
+                </ul>
+                
+                <div class="tab-content" id="uploadTabsContent">
+                  <!-- Одиночная загрузка -->
+                  <div class="tab-pane fade show active" id="single-upload" role="tabpanel" aria-labelledby="single-upload-tab">
+                    <form @submit.prevent="uploadSingleContent">
+                      <div class="row">
+                        <div class="col-md-6 mb-3">
+                          <label for="title" class="form-label">Название</label>
+                          <input type="text" class="form-control" id="title" v-model="contentForm.title" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                          <label for="description" class="form-label">Описание</label>
+                          <textarea class="form-control" id="description" rows="3" v-model="contentForm.description" required></textarea>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="col-md-6 mb-3">
+                          <label for="department" class="form-label">Отдел</label>
+                          <select class="form-select" id="department" v-model="contentForm.department_id" required>
+                            <option v-for="department in departments" :key="department.id" :value="department.id">
+                              {{ department.department_name }}
+                            </option>
+                          </select>
+                          <small class="text-muted">Файлы будут автоматически сохранены в папку ContentForDepartment/AllTypesOfFiles/{ID отдела}</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                          <label for="access_level" class="form-label">Уровень доступа</label>
+                          <select class="form-select" id="access_level" v-model="contentForm.access_level" required>
+                            <option v-for="access in accessLevels" :key="access.id" :value="access.id">
+                              {{ access.access_name }}
+                            </option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="col-md-6 mb-3">
+                          <label for="tag" class="form-label">Тег</label>
+                          <select class="form-select" id="tag" v-model="contentForm.tag_id">
+                            <option value="">Без категории</option>
+                            <option v-for="tag in tags" :key="tag.id" :value="tag.id">
+                              {{ tag.tag_name }}
+                            </option>
+                          </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                          <label for="file" class="form-label">Выбор файла</label>
+                          <input type="file" class="form-control" id="file" @change="handleFileUpload" required>
+                        </div>
+                      </div>
+                      <button type="submit" class="btn btn-info">Загрузить</button>
+                    </form>
                   </div>
-                  <div class="row">
-                    <div class="col-md-6 mb-3">
-                      <label for="department" class="form-label">Отдел</label>
-                      <select class="form-select" id="department" v-model="contentForm.department_id" required>
-                        <option v-for="department in departments" :key="department.id" :value="department.id">
-                          {{ department.department_name }}
-                        </option>
-                      </select>
-                      <small class="text-muted">Файлы будут автоматически сохранены в папку ContentForDepartment/AllTypesOfFiles/{ID отдела}</small>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label for="access_level" class="form-label">Уровень доступа</label>
-                      <select class="form-select" id="access_level" v-model="contentForm.access_level" required>
-                        <option v-for="access in accessLevels" :key="access.id" :value="access.id">
-                          {{ access.access_name }}
-                        </option>
-                      </select>
-                    </div>
+                  
+                  <!-- Пакетная загрузка -->
+                  <div class="tab-pane fade" id="batch-upload" role="tabpanel" aria-labelledby="batch-upload-tab">
+                    <form @submit.prevent="uploadBatchContent">
+                      <div class="row">
+                        <div class="col-md-6 mb-3">
+                          <label for="batch_department" class="form-label">Отдел</label>
+                          <select class="form-select" id="batch_department" v-model="batchForm.department_id" required>
+                            <option v-for="department in departments" :key="department.id" :value="department.id">
+                              {{ department.department_name }}
+                            </option>
+                          </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                          <label for="batch_access_level" class="form-label">Уровень доступа</label>
+                          <select class="form-select" id="batch_access_level" v-model="batchForm.access_id" required>
+                            <option v-for="access in accessLevels" :key="access.id" :value="access.id">
+                              {{ access.access_name }}
+                            </option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="col-md-6 mb-3">
+                          <label for="batch_tag" class="form-label">Тег (для всех файлов)</label>
+                          <select class="form-select" id="batch_tag" v-model="batchForm.tag_id">
+                            <option value="">Без категории</option>
+                            <option v-for="tag in tags" :key="tag.id" :value="tag.id">
+                              {{ tag.tag_name }}
+                            </option>
+                          </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="use_filename_as_title" v-model="batchForm.use_filename_as_title">
+                            <label class="form-check-label" for="use_filename_as_title">
+                              Использовать имя файла как название документа
+                            </label>
+                          </div>
+                          <small class="text-muted">
+                            <strong>Формат имени файла:</strong> "Название Описание.расширение"<br>
+                            Пример: "Инструкция Номер Телефона2.pdf" → Название: "Инструкция", Описание: "Номер Телефона2"
+                          </small>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="col-12 mb-3">
+                          <label for="batch_files" class="form-label">Выбор файлов</label>
+                          <input type="file" class="form-control" id="batch_files" @change="handleBatchFileUpload" multiple required>
+                          <small class="text-muted">Выберите несколько файлов для пакетной загрузки</small>
+                        </div>
+                      </div>
+                      
+                      <!-- Предварительный просмотр выбранных файлов -->
+                      <div v-if="batchForm.files.length > 0" class="row mb-3">
+                        <div class="col-12">
+                          <h6>Выбранные файлы:</h6>
+                          <div class="table-responsive">
+                            <table class="table table-sm">
+                              <thead>
+                                <tr>
+                                  <th>Файл</th>
+                                  <th>Предлагаемое название</th>
+                                  <th>Описание</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr v-for="(file, index) in batchForm.files" :key="index">
+                                  <td>{{ file.name }}</td>
+                                  <td>
+                                    <input type="text" class="form-control form-control-sm" 
+                                           v-model="batchForm.titles[index]" 
+                                           :placeholder="getSuggestedTitle(file.name)">
+                                  </td>
+                                  <td>
+                                    <textarea class="form-control form-control-sm" rows="2"
+                                              v-model="batchForm.descriptions[index]" 
+                                              placeholder="Описание документа"></textarea>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <button type="submit" class="btn btn-success">Загрузить все файлы</button>
+                    </form>
                   </div>
-                  <div class="row">
-                    <div class="col-md-6 mb-3">
-                      <label for="tag" class="form-label">Тег</label>
-                      <select class="form-select" id="tag" v-model="contentForm.tag_id">
-                        <option value="">Без категории</option>
-                        <option v-for="tag in tags" :key="tag.id" :value="tag.id">
-                          {{ tag.tag_name }}
-                        </option>
-                      </select>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      <label for="file" class="form-label">Выбор файла</label>
-                      <input type="file" class="form-control" id="file" @change="handleFileUpload" required>
-                    </div>
-                  </div>
-                  <button type="submit" class="btn btn-info">Загрузить</button>
-                  <div v-if="uploadMessage" :class="['alert', uploadStatus ? 'alert-success' : 'alert-danger', 'mt-3']">
-                    {{ uploadMessage }}
-                  </div>
-                </form>
+                </div>
+                
+                <div v-if="uploadMessage" :class="['alert', uploadStatus ? 'alert-success' : 'alert-danger', 'mt-3']">
+                  {{ uploadMessage }}
+                </div>
               </div>
               <!-- Вкладка инициализации LLM -->
               <div class="tab-pane fade" id="initialize" role="tabpanel" aria-labelledby="initialize-tab">
@@ -684,6 +788,17 @@ export default {
       uploadMessage: '',
       uploadStatus: false,
       
+      // Форма пакетной загрузки контента
+      batchForm: {
+        department_id: null,
+        access_id: null,
+        tag_id: null,
+        use_filename_as_title: true,
+        files: [],
+        titles: [],
+        descriptions: []
+      },
+      
       // Списки для выпадающих меню
       departments: [],
       accessLevels: [],
@@ -848,8 +963,8 @@ export default {
       this.contentForm.file = event.target.files[0];
     },
     
-    // Загрузка контента
-    async uploadContent() {
+    // Одиночная загрузка контента
+    async uploadSingleContent() {
       try {
         if (!this.contentForm.title || !this.contentForm.description || !this.contentForm.department_id || 
             !this.contentForm.access_level || !this.contentForm.file) {
@@ -859,15 +974,16 @@ export default {
         }
 
         const formData = new FormData();
-        formData.append('file', this.contentForm.file);
+        formData.append('files', this.contentForm.file);
+        formData.append('access_id', this.contentForm.access_level);
+        formData.append('department_id', this.contentForm.department_id);
+        formData.append('tag_id', this.contentForm.tag_id || '');
+        formData.append('use_filename_as_title', 'false');
+        formData.append('titles', JSON.stringify([this.contentForm.title]));
+        formData.append('descriptions', JSON.stringify([this.contentForm.description]));
         
-        // Отправляем запрос с параметрами в URL-строке
         const response = await axios.post(
-            `${import.meta.env.VITE_API_URL}/content/upload-content?title=${encodeURIComponent(this.contentForm.title)}` +
-            `&description=${encodeURIComponent(this.contentForm.description)}` +
-            `&access_id=${this.contentForm.access_level}` +
-            `&department_id=${this.contentForm.department_id}` +
-            `&tag_id=${this.contentForm.tag_id || ''}`,
+            `${import.meta.env.VITE_API_URL}/content/upload-content`,
             formData,
             {
                 headers: {
@@ -903,6 +1019,132 @@ export default {
         this.uploadStatus = false;
         console.error('Ошибка загрузки контента:', error);
       }
+    },
+    
+    // Пакетная загрузка контента
+    async uploadBatchContent() {
+      try {
+        if (!this.batchForm.department_id || !this.batchForm.access_id || this.batchForm.files.length === 0) {
+          this.uploadMessage = 'Выберите отдел, уровень доступа и файлы для загрузки';
+          this.uploadStatus = false;
+          return;
+        }
+
+        const formData = new FormData();
+        
+        // Добавляем все файлы
+        this.batchForm.files.forEach(file => {
+          formData.append('files', file);
+        });
+        
+        formData.append('access_id', this.batchForm.access_id);
+        formData.append('department_id', this.batchForm.department_id);
+        formData.append('tag_id', this.batchForm.tag_id || '');
+        formData.append('use_filename_as_title', this.batchForm.use_filename_as_title.toString());
+        
+        // Добавляем названия и описания, если они указаны
+        if (this.batchForm.titles.length > 0) {
+          formData.append('titles', JSON.stringify(this.batchForm.titles));
+        }
+        if (this.batchForm.descriptions.length > 0) {
+          formData.append('descriptions', JSON.stringify(this.batchForm.descriptions));
+        }
+        
+        const response = await axios.post(
+            `${import.meta.env.VITE_API_URL}/content/upload-content`,
+            formData,
+            {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            }
+        );
+        
+        this.uploadMessage = `Успешно загружено ${response.data.uploaded_count} файлов в папку ContentForDepartment/AllTypesOfFiles/${this.batchForm.department_id}!`;
+        this.uploadStatus = true;
+        
+        // Очистка формы
+        this.batchForm = {
+          department_id: null,
+          access_id: null,
+          tag_id: null,
+          use_filename_as_title: true,
+          files: [],
+          titles: [],
+          descriptions: []
+        };
+        
+        // Сбрасываем поле загрузки файлов
+        document.getElementById('batch_files').value = '';
+        
+        // Обновляем таблицу контента
+        const contentTableRef = this.$refs.contentTable;
+        if (contentTableRef && typeof contentTableRef.fetchAllContent === 'function') {
+          contentTableRef.fetchAllContent();
+        }
+        
+      } catch (error) {
+        this.uploadMessage = error.response?.data?.detail || 'Ошибка при пакетной загрузке контента';
+        this.uploadStatus = false;
+        console.error('Ошибка пакетной загрузки контента:', error);
+      }
+    },
+    
+    // Обработка загрузки файла (одиночная)
+    handleFileUpload(event) {
+      this.contentForm.file = event.target.files[0];
+    },
+    
+    // Обработка загрузки файлов (пакетная)
+    handleBatchFileUpload(event) {
+      this.batchForm.files = Array.from(event.target.files);
+      this.batchForm.titles = [];
+      this.batchForm.descriptions = [];
+      
+      // Инициализируем массивы названий и описаний
+      this.batchForm.files.forEach((file, index) => {
+        if (this.batchForm.use_filename_as_title) {
+          // Парсим название и описание из имени файла
+          const parsedData = this.parseFilenameToTitleAndDescription(file.name);
+          this.batchForm.titles[index] = parsedData.title;
+          this.batchForm.descriptions[index] = parsedData.description;
+        } else {
+          this.batchForm.titles[index] = '';
+          this.batchForm.descriptions[index] = '';
+        }
+      });
+    },
+    
+    // Парсинг имени файла для извлечения названия и описания
+    parseFilenameToTitleAndDescription(filename) {
+      // Убираем расширение файла
+      const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
+      
+      // Ищем первый пробел для разделения названия и описания
+      const firstSpaceIndex = nameWithoutExt.indexOf(' ');
+      
+      if (firstSpaceIndex === -1) {
+        // Если пробела нет, используем все имя файла как название
+        return {
+          title: nameWithoutExt,
+          description: ''
+        };
+      }
+      
+      // Разделяем на название (до первого пробела) и описание (после первого пробела)
+      const title = nameWithoutExt.substring(0, firstSpaceIndex);
+      const description = nameWithoutExt.substring(firstSpaceIndex + 1);
+      
+      return {
+        title: title,
+        description: description
+      };
+    },
+    
+    // Получение предлагаемого названия для файла (для обратной совместимости)
+    getSuggestedTitle(filename) {
+      const parsedData = this.parseFilenameToTitleAndDescription(filename);
+      return parsedData.title;
     },
     
     // Создание нового теста/анкеты

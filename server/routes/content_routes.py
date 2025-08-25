@@ -6,7 +6,7 @@ from models_db import Access, Content, User, Tag
 from routes.user_routes import get_current_user, require_admin, is_admin
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from typing import List
+from typing import List, Optional
 import re
 import requests
 import shutil
@@ -20,6 +20,19 @@ router = APIRouter(prefix="/content", tags=["content"])
 
 # ✅ Добавляем rate limiter
 limiter = Limiter(key_func=get_remote_address)
+
+# Модель для пакетной загрузки контента
+class BatchContentItem(BaseModel):
+    title: Optional[str] = None  # Если не указано, будет использовано имя файла
+    description: Optional[str] = None
+    tag_id: Optional[int] = None
+
+# Модель для пакетной загрузки
+class BatchUploadRequest(BaseModel):
+    access_id: int
+    department_id: int
+    items: List[BatchContentItem] = []  # Опционально для указания названий/описаний
+    use_filename_as_title: bool = True  # Использовать имя файла как название по умолчанию
 
 @router.get("/document-viewer/{content_id}")
 @limiter.limit("100/minute")  # ✅ Высокий лимит для просмотра документов
@@ -204,16 +217,24 @@ async def get_document_viewer_page(
 @limiter.limit("20/minute")  # ✅ Умеренный лимит для загрузки контента
 async def upload_content(
     request: Request,
-    title: str,
-    description: str,
-    access_id: int,
-    department_id: int,
-    file: UploadFile = File(...),
-    tag_id: int = None,
-    user_id: int = None,
+    files: List[UploadFile] = File(...),
+    access_id: int = Form(...),
+    department_id: int = Form(...),
+    tag_id: Optional[int] = Form(None),
+    user_id: Optional[int] = Form(None),
+    use_filename_as_title: bool = Form(True),
+    titles: Optional[str] = Form(None),  # JSON строка с названиями
+    descriptions: Optional[str] = Form(None),  # JSON строка с описаниями
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Пакетная загрузка контента с поддержкой множественных файлов.
+    Названия документов могут быть указаны в параметре titles (JSON массив),
+    или будут взяты из имен файлов, если use_filename_as_title=True
+    """
+    import json
+    
     # Проверки прав: user_id (если передан) должен совпадать с текущим пользователем, иначе только админ
     if user_id is not None and user_id != current_user.id and not is_admin(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки от имени другого пользователя")
@@ -221,6 +242,11 @@ async def upload_content(
     # Админ может грузить в любой отдел; не-админ только в свой отдел
     if not is_admin(current_user) and department_id != current_user.department_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки в другой отдел")
+
+    # Проверка существования уровня доступа
+    access = db.query(Access).filter(Access.id == access_id).first()
+    if access is None:
+        raise HTTPException(status_code=400, detail="Уровень доступа не найден")
 
     # Создаем базовую директорию /app/files/, если она не существует
     os.makedirs("/app/files/", exist_ok=True)
@@ -232,34 +258,172 @@ async def upload_content(
     # Создаем директорию для отдела, если она не существует
     os.makedirs(target_dir, exist_ok=True)
     
-    # Формируем полный путь к файлу
-    file_location = f"{target_dir}/{file.filename}"
+    # Парсим названия и описания из JSON строк
+    titles_list = []
+    descriptions_list = []
     
-    try:
-        with open(file_location, "wb") as f:
-            f.write(await file.read())
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при сохранении файла: {str(e)}")
+    if titles:
+        try:
+            titles_list = json.loads(titles)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Неверный формат JSON для названий")
+    
+    if descriptions:
+        try:
+            descriptions_list = json.loads(descriptions)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Неверный формат JSON для описаний")
+    
+    # Список для хранения информации о загруженных файлах
+    uploaded_files_info = []
+    
+    for i, file in enumerate(files):
+        # Определяем название документа
+        if i < len(titles_list) and titles_list[i]:
+            title = titles_list[i]
+        elif use_filename_as_title:
+            # Убираем расширение файла для более красивого названия
+            title = os.path.splitext(file.filename)[0]
+        else:
+            title = file.filename
+        
+        # Определяем описание документа
+        if i < len(descriptions_list) and descriptions_list[i]:
+            description = descriptions_list[i]
+        else:
+            description = f"Загруженный файл: {file.filename}"
+        
+        # Формируем полный путь к файлу
+        file_location = f"{target_dir}/{file.filename}"
+        
+        try:
+            with open(file_location, "wb") as f:
+                f.write(await file.read())
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Ошибка при сохранении файла {file.filename}: {str(e)}")
+
+        # Создание записи в базе данных
+        new_content = Content(
+            title=title,
+            description=description,
+            file_path=file_location,
+            access_level=access_id,
+            department_id=department_id,
+            tag_id=tag_id  # Указываем тег, если он есть
+        )
+        db.add(new_content)
+        db.commit()
+        db.refresh(new_content)
+
+        uploaded_files_info.append({
+            "id": new_content.id,
+            "filename": file.filename,
+            "title": title,
+            "description": description,
+            "file_path": file_location
+        })
+
+    return {
+        "message": f"Контент успешно загружен в {target_dir}",
+        "uploaded_count": len(uploaded_files_info),
+        "files": uploaded_files_info
+    }
+
+@router.post("/upload-content-batch")
+@limiter.limit("15/minute")  # ✅ Умеренный лимит для пакетной загрузки
+async def upload_content_batch(
+    request: Request,
+    files: List[UploadFile] = File(...),
+    batch_data: BatchUploadRequest = Form(...),
+    user_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Пакетная загрузка контента с использованием структурированных данных.
+    Поддерживает указание названий и описаний для каждого файла через batch_data.items
+    """
+    # Проверки прав: user_id (если передан) должен совпадать с текущим пользователем, иначе только админ
+    if user_id is not None and user_id != current_user.id and not is_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки от имени другого пользователя")
+
+    # Админ может грузить в любой отдел; не-админ только в свой отдел
+    if not is_admin(current_user) and batch_data.department_id != current_user.department_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для загрузки в другой отдел")
 
     # Проверка существования уровня доступа
-    access = db.query(Access).filter(Access.id == access_id).first()
+    access = db.query(Access).filter(Access.id == batch_data.access_id).first()
     if access is None:
         raise HTTPException(status_code=400, detail="Уровень доступа не найден")
 
-    # Создание записи в базе данных
-    new_content = Content(
-        title=title,
-        description=description,
-        file_path=file_location,
-        access_level=access_id,
-        department_id=department_id,
-        tag_id=tag_id  # Указываем тег, если он есть
-    )
-    db.add(new_content)
-    db.commit()
-    db.refresh(new_content)
+    # Создаем базовую директорию /app/files/, если она не существует
+    os.makedirs("/app/files/", exist_ok=True)
+    
+    # Автоматически формируем путь на основе ID отдела с новой структурой
+    department_directory = f"ContentForDepartment/AllTypesOfFiles/{batch_data.department_id}"
+    target_dir = f"/app/files/{department_directory}"
+    
+    # Создаем директорию для отдела, если она не существует
+    os.makedirs(target_dir, exist_ok=True)
+    
+    # Список для хранения информации о загруженных файлах
+    uploaded_files_info = []
+    
+    for i, file in enumerate(files):
+        # Получаем данные для текущего файла
+        item_data = batch_data.items[i] if i < len(batch_data.items) else BatchContentItem()
+        
+        # Определяем название документа
+        if item_data.title:
+            title = item_data.title
+        elif batch_data.use_filename_as_title:
+            # Убираем расширение файла для более красивого названия
+            title = os.path.splitext(file.filename)[0]
+        else:
+            title = file.filename
+        
+        # Определяем описание документа
+        if item_data.description:
+            description = item_data.description
+        else:
+            description = f"Загруженный файл: {file.filename}"
+        
+        # Формируем полный путь к файлу
+        file_location = f"{target_dir}/{file.filename}"
+        
+        try:
+            with open(file_location, "wb") as f:
+                f.write(await file.read())
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Ошибка при сохранении файла {file.filename}: {str(e)}")
 
-    return {"message": f"Контент успешно загружен в {file_location}"}
+        # Создание записи в базе данных
+        new_content = Content(
+            title=title,
+            description=description,
+            file_path=file_location,
+            access_level=batch_data.access_id,
+            department_id=batch_data.department_id,
+            tag_id=item_data.tag_id
+        )
+        db.add(new_content)
+        db.commit()
+        db.refresh(new_content)
+
+        uploaded_files_info.append({
+            "id": new_content.id,
+            "filename": file.filename,
+            "title": title,
+            "description": description,
+            "file_path": file_location,
+            "tag_id": item_data.tag_id
+        })
+
+    return {
+        "message": f"Контент успешно загружен в {target_dir}",
+        "uploaded_count": len(uploaded_files_info),
+        "files": uploaded_files_info
+    }
 
 @router.post("/upload-files")
 @limiter.limit("10/minute")  # ✅ Строгий лимит для массовой загрузки
