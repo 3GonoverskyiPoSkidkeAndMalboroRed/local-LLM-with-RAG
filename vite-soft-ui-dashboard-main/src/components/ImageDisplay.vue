@@ -3,7 +3,10 @@
     <div v-if="images && images.length > 0" class="mt-3">
       <h6 class="text-muted mb-2">
         <i class="fas fa-images me-2"></i>
-        Изображения из документа ({{ images.length }})
+        Релевантные изображения ({{ images.length }})
+        <small class="text-muted ms-2">
+          Отсортированы по релевантности к тексту
+        </small>
       </h6>
       
       <div class="image-grid">
@@ -23,12 +26,26 @@
             <div class="image-overlay">
               <i class="fas fa-expand"></i>
             </div>
+            
+            <!-- Индикатор релевантности -->
+            <div class="relevance-indicator" :class="getRelevanceClass(image.relevance_score)">
+              {{ Math.round((image.relevance_score || 0) * 100) }}%
+            </div>
           </div>
           
           <div class="image-info">
-            <small class="text-muted">
-              {{ getImageInfo(image) }}
-            </small>
+            <div class="image-title">
+              <small class="text-muted">
+                {{ getImageInfo(image) }}
+              </small>
+            </div>
+            
+            <!-- Контекст изображения -->
+            <div v-if="image.context" class="image-context">
+              <small class="text-muted">
+                {{ getContextPreview(image.context) }}
+              </small>
+            </div>
           </div>
         </div>
       </div>
@@ -58,6 +75,20 @@
               class="img-fluid"
               style="max-height: 70vh;"
             />
+            
+            <!-- Информация о релевантности -->
+            <div v-if="selectedImage && selectedImage.relevance_score !== undefined" class="mt-3">
+              <div class="alert alert-info">
+                <strong>Релевантность к тексту:</strong> {{ Math.round((selectedImage.relevance_score || 0) * 100) }}%
+                <div class="progress mt-2" style="height: 8px;">
+                  <div 
+                    class="progress-bar" 
+                    :class="getRelevanceClass(selectedImage.relevance_score)"
+                    :style="{ width: (selectedImage.relevance_score || 0) * 100 + '%' }"
+                  ></div>
+                </div>
+              </div>
+            </div>
             
             <div v-if="selectedImage && selectedImage.context" class="mt-3">
               <h6>Контекст изображения:</h6>
@@ -122,6 +153,19 @@ export default {
       return info.join(' • ')
     },
     
+    getContextPreview(context) {
+      if (!context) return ''
+      return context.length > 80 ? context.substring(0, 80) + '...' : context
+    },
+    
+    getRelevanceClass(relevanceScore) {
+      if (!relevanceScore) return 'relevance-low'
+      
+      if (relevanceScore >= 0.7) return 'relevance-high'
+      if (relevanceScore >= 0.4) return 'relevance-medium'
+      return 'relevance-low'
+    },
+    
     openImageModal(image, index) {
       this.selectedImage = image
       this.selectedImageIndex = index
@@ -155,7 +199,7 @@ export default {
 
 .image-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 1rem;
   margin-top: 0.5rem;
 }
@@ -166,10 +210,11 @@ export default {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #e9ecef;
+  background: white;
 }
 
 .image-item:hover {
-  transform: scale(1.05);
+  transform: scale(1.02);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
@@ -213,23 +258,78 @@ export default {
   filter: brightness(0.8);
 }
 
+/* Индикатор релевантности */
+.relevance-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  min-width: 30px;
+  text-align: center;
+}
+
+.relevance-high {
+  background: rgba(40, 167, 69, 0.9) !important;
+}
+
+.relevance-medium {
+  background: rgba(255, 193, 7, 0.9) !important;
+}
+
+.relevance-low {
+  background: rgba(108, 117, 125, 0.9) !important;
+}
+
 .image-info {
-  padding: 0.5rem;
+  padding: 0.75rem;
   background: #f8f9fa;
+}
+
+.image-title {
+  margin-bottom: 0.5rem;
+}
+
+.image-context {
   font-size: 0.75rem;
-  line-height: 1.2;
+  line-height: 1.3;
+  color: #6c757d;
+  border-top: 1px solid #e9ecef;
+  padding-top: 0.5rem;
 }
 
 /* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
   .image-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 0.5rem;
   }
   
   .image-info {
-    padding: 0.25rem;
-    font-size: 0.7rem;
+    padding: 0.5rem;
   }
+  
+  .relevance-indicator {
+    font-size: 0.6rem;
+    padding: 1px 4px;
+    min-width: 25px;
+  }
+}
+
+/* Прогресс-бар для модального окна */
+.progress-bar.relevance-high {
+  background-color: #28a745;
+}
+
+.progress-bar.relevance-medium {
+  background-color: #ffc107;
+}
+
+.progress-bar.relevance-low {
+  background-color: #6c757d;
 }
 </style>
