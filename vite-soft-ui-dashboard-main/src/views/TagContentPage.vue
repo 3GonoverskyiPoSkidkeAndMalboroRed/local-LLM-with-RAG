@@ -262,9 +262,18 @@ export default {
         // Открываем модальное окно
         this.mediaPlayerModal.show();
       } else {
-        // Для всех остальных файлов используем Google Docs Viewer
-        const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
-        window.open(viewerUrl, '_blank');
+        // Проверяем, является ли файл текстовым для просмотра с выделением
+        const supportedTextFormats = ['txt', 'md', 'html'];
+        
+        if (supportedTextFormats.includes(fileExtension)) {
+          // Для текстовых файлов используем просмотр с выделением
+          const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer-with-highlight/${doc.id}`;
+          window.open(viewerUrl, '_blank');
+        } else {
+          // Для остальных файлов используем Google Docs Viewer
+          const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
+          window.open(viewerUrl, '_blank');
+        }
       }
     },
     async downloadDocument(doc) {

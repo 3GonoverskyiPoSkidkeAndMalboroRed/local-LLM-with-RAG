@@ -97,6 +97,7 @@
                         :userQuery="message.userQuery || ''"
                         @show-notification="showNotification"
                         @open-source-modal="openSourceModal"
+                        @view-original-document="viewOriginalDocument"
                       />
                     </div>
                   </div>
@@ -352,6 +353,65 @@ export default {
           message: 'Bootstrap не загружен. Перезагрузите страницу.'
         });
       }
+    },
+
+    viewOriginalDocument(source) {
+      // Получаем информацию о документе из источника
+      const documentId = source.document_id || source.content_id;
+      const userQuery = this.getLastUserQuery();
+      
+      if (!documentId) {
+        this.showNotification({
+          type: 'error',
+          message: 'Не удалось определить ID документа для просмотра'
+        });
+        return;
+      }
+      
+      // Определяем тип файла для выбора правильного способа просмотра
+      const fileName = source.file_name || '';
+      const fileExtension = fileName.toLowerCase().split('.').pop() || '';
+      const supportedTextFormats = ['txt', 'md', 'html'];
+      
+      if (supportedTextFormats.includes(fileExtension)) {
+        // Для текстовых файлов используем просмотр с выделением
+        const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer-with-highlight/${documentId}`;
+        let fullUrl = viewerUrl;
+        
+        if (userQuery) {
+          // Передаем поисковый запрос для выделения
+          const encodedQuery = encodeURIComponent(userQuery);
+          fullUrl += `?search_query=${encodedQuery}`;
+        }
+        
+        // Открываем в новой вкладке
+        window.open(fullUrl, '_blank');
+        
+        this.showNotification({
+          type: 'success',
+          message: 'Документ открыт в новой вкладке с выделением найденного отрывка'
+        });
+      } else {
+        // Для остальных файлов используем обычный просмотр
+        const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer/${documentId}`;
+        window.open(viewerUrl, '_blank');
+        
+        this.showNotification({
+          type: 'success',
+          message: 'Документ открыт в новой вкладке'
+        });
+      }
+    },
+    
+    getLastUserQuery() {
+      // Получаем последний запрос пользователя из чата
+      for (let i = this.chatMessages.length - 1; i >= 0; i--) {
+        const message = this.chatMessages[i];
+        if (message.role === 'user') {
+          return message.content;
+        }
+      }
+      return '';
     },
     
     async processHybridRAG(message, departmentId) {

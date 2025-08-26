@@ -73,6 +73,14 @@
                       <i class="fas fa-external-link-alt"></i>
                       Детали
                     </button>
+                    <button 
+                      class="btn btn-sm btn-outline-success"
+                      @click="viewOriginalDocument(source)"
+                      title="Просмотреть оригинальный документ с выделением отрывка"
+                    >
+                      <i class="fas fa-file-alt"></i>
+                      Просмотреть документ
+                    </button>
                   </div>
                 </div>
                 
@@ -514,6 +522,10 @@ export default {
     
     openSourceModal(source, isMainSource) {
       this.$emit('open-source-modal', source, isMainSource);
+    },
+
+    viewOriginalDocument(source) {
+      this.$emit('view-original-document', source);
     }
   }
 }

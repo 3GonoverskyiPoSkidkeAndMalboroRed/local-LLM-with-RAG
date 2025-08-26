@@ -51,17 +51,22 @@ async def get_document_viewer_page(
         if not content:
             raise HTTPException(status_code=404, detail="Документ не найден")
         
-        # Проверяем доступ пользователя к документу
+        # Проверяем доступ пользователя к документу - упрощенная проверка
         if not (is_admin(current_user) or (
             current_user.access_id == content.access_level and current_user.department_id == content.department_id
         )):
+            # Логируем для отладки
+            print(f"Access denied for user {current_user.id} to content {content_id}")
+            print(f"User access_id: {current_user.access_id}, content access_level: {content.access_level}")
+            print(f"User department_id: {current_user.department_id}, content department_id: {content.department_id}")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра документа")
 
         # Получаем расширение файла
         file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
         
-        # Определяем URL для скачивания файла - используем относительный путь
-        download_url = f"/content/download-file/{content_id}"
+        # Определяем URL для скачивания файла - используем полный URL
+        base_url = str(request.base_url).rstrip('/')
+        download_url = f"{base_url}/content/download-file/{content_id}"
         
         # Поддерживаемые форматы для Google Docs Viewer
         supported_formats = ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf']
@@ -130,13 +135,17 @@ async def get_document_viewer_page(
                         height: calc(100vh - 80px);
                         border: none;
                     }}
+                    .fallback-content {{
+                        padding: 20px;
+                        text-align: center;
+                    }}
                 </style>
             </head>
             <body>
                 <div class="header">
                     <h1>{content.title}</h1>
                     <div class="controls">
-                        <a href="/content/download-file/{content_id}" class="btn btn-primary">Скачать</a>
+                        <a href="{download_url}" class="btn btn-primary">Скачать</a>
                         <a href="javascript:history.back()" class="btn btn-secondary">Назад</a>
                     </div>
                 </div>
@@ -144,7 +153,26 @@ async def get_document_viewer_page(
                     <strong>Внимание:</strong> Google Docs Viewer может не работать с файлами на localhost. 
                     Для корректной работы убедитесь, что файл доступен по публичному URL.
                 </div>
-                <iframe id="viewer" src="{google_docs_url}"></iframe>
+                <iframe id="viewer" src="{google_docs_url}" onerror="showFallback()"></iframe>
+                <div id="fallback" class="fallback-content" style="display: none;">
+                    <h3>Google Docs Viewer недоступен</h3>
+                    <p>Попробуйте скачать файл для просмотра в соответствующем приложении.</p>
+                    <a href="{download_url}" class="btn btn-primary">Скачать файл</a>
+                </div>
+                <script>
+                    function showFallback() {{
+                        document.getElementById('viewer').style.display = 'none';
+                        document.getElementById('fallback').style.display = 'block';
+                    }}
+                    
+                    // Проверяем загрузку iframe
+                    setTimeout(function() {{
+                        const iframe = document.getElementById('viewer');
+                        if (iframe.contentDocument && iframe.contentDocument.body.innerHTML.includes('error')) {{
+                            showFallback();
+                        }}
+                    }}, 5000);
+                </script>
             </body>
             </html>
             """
@@ -200,7 +228,7 @@ async def get_document_viewer_page(
                     <p>Формат файла <strong>.{file_extension}</strong> не поддерживается для просмотра в браузере.</p>
                     <p>Вы можете скачать файл для просмотра в соответствующем приложении.</p>
                     <div>
-                        <a href="/content/download-file/{content_id}" class="btn btn-primary">Скачать файл</a>
+                        <a href="{download_url}" class="btn btn-primary">Скачать файл</a>
                         <a href="javascript:history.back()" class="btn btn-secondary">Назад</a>
                     </div>
                 </div>
@@ -211,6 +239,200 @@ async def get_document_viewer_page(
             return HTMLResponse(content=html_content)
             
     except Exception as e:
+        print(f"Error in document viewer: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы просмотра: {str(e)}")
+
+@router.get("/document-viewer-with-highlight/{content_id}")
+@limiter.limit("100/minute")
+async def get_document_viewer_with_highlight(
+    request: Request,
+    content_id: int,
+    search_query: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Возвращает HTML страницу для просмотра документа с выделением найденных отрывков
+    """
+    try:
+        # Получаем контент из базы данных
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if not content:
+            raise HTTPException(status_code=404, detail="Документ не найден")
+        
+        # Проверяем доступ пользователя к документу
+        if not (is_admin(current_user) or (
+            current_user.access_id == content.access_level and current_user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра документа")
+
+        # Получаем расширение файла
+        file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
+        
+        # Определяем URL для скачивания файла
+        base_url = str(request.base_url).rstrip('/')
+        download_url = f"{base_url}/content/download-file/{content_id}"
+        
+        # Поддерживаемые форматы для просмотра с выделением
+        supported_formats = ['txt', 'md', 'html']
+        
+        if file_extension in supported_formats:
+            # Читаем содержимое файла
+            try:
+                file_path = os.path.join("documents", content.file_path)
+                if os.path.exists(file_path):
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        file_content = f.read()
+                else:
+                    file_content = f"Файл {content.file_path} не найден на сервере."
+            except Exception as e:
+                file_content = f"Ошибка при чтении файла: {str(e)}"
+            
+            # Выделяем найденные отрывки, если есть поисковый запрос
+            if search_query:
+                import re
+                pattern = re.compile(f'({re.escape(search_query)})', re.IGNORECASE)
+                file_content = pattern.sub(r'<mark>\1</mark>', file_content)
+            
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{content.title} - Просмотр документа</title>
+                <style>
+                    body {{
+                        margin: 0;
+                        padding: 0;
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background-color: #f8f9fa;
+                    }}
+                    .header {{
+                        background: #ffffff;
+                        padding: 15px 20px;
+                        border-bottom: 1px solid #dee2e6;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }}
+                    .header h1 {{
+                        margin: 0;
+                        font-size: 20px;
+                        color: #333;
+                        font-weight: 600;
+                    }}
+                    .header .controls {{
+                        display: flex;
+                        gap: 10px;
+                    }}
+                    .btn {{
+                        padding: 8px 16px;
+                        border: none;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        text-decoration: none;
+                        font-size: 14px;
+                        font-weight: 500;
+                        transition: all 0.3s ease;
+                    }}
+                    .btn-primary {{
+                        background: #007bff;
+                        color: white;
+                    }}
+                    .btn-primary:hover {{
+                        background: #0056b3;
+                    }}
+                    .btn-secondary {{
+                        background: #6c757d;
+                        color: white;
+                    }}
+                    .btn-secondary:hover {{
+                        background: #545b62;
+                    }}
+                    .document-container {{
+                        max-width: 800px;
+                        margin: 20px auto;
+                        background: white;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        overflow: hidden;
+                    }}
+                    .document-content {{
+                        padding: 30px;
+                        line-height: 1.8;
+                        font-size: 16px;
+                        color: #333;
+                        white-space: pre-wrap;
+                        word-wrap: break-word;
+                    }}
+                    .document-content mark {{
+                        background-color: #fff3cd;
+                        color: #856404;
+                        padding: 2px 4px;
+                        border-radius: 3px;
+                        font-weight: 600;
+                    }}
+                    .search-info {{
+                        background: #e7f3ff;
+                        border: 1px solid #b3d9ff;
+                        color: #0066cc;
+                        padding: 10px 20px;
+                        margin: 0;
+                        font-size: 14px;
+                    }}
+                    .document-meta {{
+                        background: #f8f9fa;
+                        padding: 15px 30px;
+                        border-bottom: 1px solid #dee2e6;
+                        color: #6c757d;
+                        font-size: 14px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>{content.title}</h1>
+                    <div class="controls">
+                        <a href="{download_url}" class="btn btn-primary">Скачать</a>
+                        <a href="javascript:history.back()" class="btn btn-secondary">Назад</a>
+                    </div>
+                </div>
+                <div class="document-container">
+                    <div class="document-meta">
+                        <strong>Формат:</strong> {file_extension.upper()} | 
+                        <strong>Размер:</strong> {len(file_content)} символов
+                        {f' | <strong>Поиск:</strong> "{search_query}"' if search_query else ''}
+                    </div>
+                    {f'<div class="search-info">Найдено выделений для запроса: <strong>"{search_query}"</strong></div>' if search_query else ''}
+                    <div class="document-content">{file_content}</div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            return HTMLResponse(content=html_content)
+        else:
+            # Для неподдерживаемых форматов перенаправляем на обычный просмотр
+            return HTMLResponse(content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Перенаправление</title>
+            </head>
+            <body>
+                <script>
+                    window.location.href = '{base_url}/content/document-viewer/{content_id}';
+                </script>
+                <p>Перенаправление на просмотр документа...</p>
+            </body>
+            </html>
+            """)
+            
+    except Exception as e:
+        print(f"Error in document viewer with highlight: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы просмотра: {str(e)}")
 
 @router.post("/upload-content")

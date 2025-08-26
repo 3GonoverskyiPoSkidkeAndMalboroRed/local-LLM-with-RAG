@@ -1,153 +1,83 @@
 #!/usr/bin/env python3
 """
-Скрипт для инициализации RAG для конкретного отдела
+Скрипт для инициализации RAG системы для отдела
 """
 
-import asyncio
-import sys
-import os
+import requests
+import json
 
-# Добавляем путь к серверу
-sys.path.append('server')
+# Настройки
+BASE_URL = "http://localhost:8000"
+LOGIN = "Pavel2"
+PASSWORD = "123123"
+DEPARTMENT_ID = 5  # Общий отдел
 
-# Устанавливаем переменные окружения
-os.environ.setdefault('DATABASE_URL', 'mysql+mysqlconnector://root:123123@localhost:3306/db_test')
-
-from yandex_rag_service import YandexRAGService
-from database import SessionLocal
-from models_db import Department, Content, RAGSession, DocumentChunk
-
-async def init_rag_for_department(department_id: int, force_reload: bool = True):
-    """Инициализирует RAG для конкретного отдела"""
+def init_rag_for_department():
+    """Инициализирует RAG систему для отдела"""
+    print("🚀 Инициализация RAG системы для отдела...")
     
-    print(f"🚀 Инициализация RAG для отдела {department_id}")
-    
-    # Создаем экземпляр RAG сервиса
-    rag_service = YandexRAGService()
-    
-    # Подключаемся к базе данных
-    db = SessionLocal()
+    # 1. Вход в систему
+    login_data = {
+        "login": LOGIN,
+        "password": PASSWORD
+    }
     
     try:
-        # Проверяем существование отдела
-        department = db.query(Department).filter(Department.id == department_id).first()
-        if not department:
-            print(f"❌ Отдел с ID {department_id} не найден")
-            return False
+        response = requests.post(f"{BASE_URL}/user/login", json=login_data)
+        print(f"Статус входа: {response.status_code}")
         
-        print(f"📁 Отдел: {department.department_name}")
-        
-        # Проверяем документы
-        contents = db.query(Content).filter(Content.department_id == department_id).all()
-        print(f"📄 Документов в отделе: {len(contents)}")
-        
-        if not contents:
-            print("❌ Нет документов для инициализации RAG")
-            return False
-        
-        # Показываем документы
-        for content in contents:
-            print(f"   - {content.title} (ID: {content.id})")
-            print(f"     Путь: {content.file_path}")
-        
-        # Проверяем текущий статус RAG
-        rag_session = db.query(RAGSession).filter(RAGSession.department_id == department_id).first()
-        if rag_session:
-            print(f"📊 Текущий RAG статус:")
-            print(f"   Инициализирована: {'✅ Да' if rag_session.is_initialized else '❌ Нет'}")
-            print(f"   Документов в RAG: {rag_session.documents_count}")
-            print(f"   Чанков в RAG: {rag_session.chunks_count}")
-        
-        # Проверяем существующие чанки
-        existing_chunks = db.query(DocumentChunk).filter(DocumentChunk.department_id == department_id).count()
-        print(f"🔍 Существующих чанков: {existing_chunks}")
-        
-        if force_reload and existing_chunks > 0:
-            print("🗑️ Удаляем существующие чанки (force_reload=True)")
-            db.query(DocumentChunk).filter(DocumentChunk.department_id == department_id).delete()
-            db.commit()
-        
-        # Инициализируем RAG
-        print("⚙️ Запускаем инициализацию RAG...")
-        result = await rag_service.initialize_rag(department_id=department_id, force_reload=force_reload)
-        
-        print(f"📋 Результат инициализации:")
-        print(f"   Успех: {'✅ Да' if result.get('success') else '❌ Нет'}")
-        print(f"   Сообщение: {result.get('message', 'Нет сообщения')}")
-        print(f"   Обработано документов: {result.get('documents_processed', 0)}")
-        print(f"   Создано чанков: {result.get('chunks_created', 0)}")
-        
-        # Проверяем результат
-        if result.get('success'):
-            # Проверяем новые чанки
-            new_chunks = db.query(DocumentChunk).filter(DocumentChunk.department_id == department_id).count()
-            print(f"🔍 Новых чанков после инициализации: {new_chunks}")
+        if response.status_code == 200:
+            token_data = response.json()
+            token = token_data.get("access_token")
+            print(f"✅ Вход успешен! Токен получен: {token[:20]}...")
             
-            # Проверяем обновленный статус RAG
-            updated_session = db.query(RAGSession).filter(RAGSession.department_id == department_id).first()
-            if updated_session:
-                print(f"📊 Обновленный RAG статус:")
-                print(f"   Инициализирована: {'✅ Да' if updated_session.is_initialized else '❌ Нет'}")
-                print(f"   Документов в RAG: {updated_session.documents_count}")
-                print(f"   Чанков в RAG: {updated_session.chunks_count}")
-                print(f"   Последнее обновление: {updated_session.last_updated}")
+            headers = {"Authorization": f"Bearer {token}"}
             
-            return True
+            # 2. Инициализируем RAG для отдела
+            init_data = {
+                "department_id": DEPARTMENT_ID,
+                "force_reload": True
+            }
+            
+            print(f"🔧 Инициализация RAG для отдела {DEPARTMENT_ID}...")
+            init_response = requests.post(f"{BASE_URL}/api/yandex-rag/initialize", json=init_data, headers=headers)
+            print(f"Статус инициализации: {init_response.status_code}")
+            
+            if init_response.status_code == 200:
+                init_result = init_response.json()
+                print("✅ RAG система инициализирована!")
+                print(f"   Результат: {init_result}")
+            else:
+                print(f"❌ Ошибка инициализации: {init_response.text}")
+                
+            # 3. Проверяем статус RAG
+            print(f"📊 Проверка статуса RAG для отдела {DEPARTMENT_ID}...")
+            status_response = requests.get(f"{BASE_URL}/api/yandex-rag/status/{DEPARTMENT_ID}", headers=headers)
+            print(f"Статус проверки: {status_response.status_code}")
+            
+            if status_response.status_code == 200:
+                status_result = status_response.json()
+                print("✅ Статус RAG получен!")
+                print(f"   Статус: {status_result}")
+            else:
+                print(f"❌ Ошибка получения статуса: {status_response.text}")
+                
         else:
-            print(f"❌ Ошибка инициализации: {result.get('message')}")
-            return False
+            print(f"❌ Ошибка входа: {response.text}")
             
+    except requests.exceptions.ConnectionError:
+        print("❌ Не удается подключиться к серверу. Убедитесь, что сервер запущен на http://localhost:8000")
     except Exception as e:
-        print(f"❌ Общая ошибка: {e}")
-        return False
-    finally:
-        db.close()
-
-async def test_rag_query(department_id: int):
-    """Тестирует RAG запрос для отдела"""
-    
-    print(f"\n🔍 Тестирование RAG запроса для отдела {department_id}")
-    
-    rag_service = YandexRAGService()
-    
-    try:
-        # Проверяем статус
-        status = await rag_service.get_rag_status(department_id)
-        print(f"📊 RAG статус: {status}")
-        
-        if status.get('is_initialized', False):
-            # Пробуем сделать запрос
-            result = await rag_service.query_rag(
-                department_id=department_id,
-                question="Что такое RAG система?"
-            )
-            print(f"💬 Результат запроса:")
-            print(f"   Ответ: {result.get('answer', 'Нет ответа')}")
-            print(f"   Источники: {len(result.get('sources', []))}")
-            print(f"   Использовано контекста: {result.get('context_used', 0)}")
-        else:
-            print("❌ RAG не инициализирована для этого отдела")
-            
-    except Exception as e:
-        print(f"❌ Ошибка при тестировании: {e}")
-
-async def main():
-    """Основная функция"""
-    
-    print("🎯 Инициализация RAG для отделов")
-    print("=" * 50)
-    
-    # Список отделов для инициализации
-    departments_to_init = [1, 5]  # Отделы с документами
-    
-    for dept_id in departments_to_init:
-        print(f"\n{'='*50}")
-        success = await init_rag_for_department(dept_id, force_reload=True)
-        
-        if success:
-            await test_rag_query(dept_id)
-        
-        print(f"{'='*50}\n")
+        print(f"❌ Ошибка: {str(e)}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    print("🚀 Запуск инициализации RAG...")
+    print(f"URL: {BASE_URL}")
+    print(f"Логин: {LOGIN}")
+    print(f"Пароль: {PASSWORD}")
+    print(f"Отдел: {DEPARTMENT_ID}")
+    print("-" * 50)
+    
+    init_rag_for_department()
+    
+    print("\n✅ Инициализация завершена!")

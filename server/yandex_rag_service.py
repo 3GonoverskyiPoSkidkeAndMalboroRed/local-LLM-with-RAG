@@ -284,6 +284,8 @@ class YandexRAGService:
                             
                             unique_sources[source_key] = {
                                 "chunk_id": source_key,
+                                "content_id": content.id,  # Добавляем ID контента для просмотра документа
+                                "document_id": content.id,  # Альтернативное поле для совместимости
                                 "file_name": content.title,
                                 "file_path": content.file_path,
                                 "chunk_content": chunk.chunk_text,

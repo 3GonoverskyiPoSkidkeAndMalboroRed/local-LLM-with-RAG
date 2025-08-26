@@ -131,9 +131,25 @@ export default {
       });
     },
     viewDocument(doc) {
-      // Используем Google Docs Viewer для всех поддерживаемых форматов
-      const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
-      window.open(viewerUrl, '_blank');
+      // Используем новый функционал просмотра с выделением для текстовых файлов
+      const fileExtension = this.getFileExtension(doc.file_path);
+      const supportedTextFormats = ['txt', 'md', 'html'];
+      
+      if (supportedTextFormats.includes(fileExtension)) {
+        // Для текстовых файлов используем просмотр с выделением
+        const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer-with-highlight/${doc.id}`;
+        if (this.searchQuery) {
+          // Если есть поисковый запрос, передаем его для выделения
+          const encodedQuery = encodeURIComponent(this.searchQuery);
+          window.open(`${viewerUrl}?search_query=${encodedQuery}`, '_blank');
+        } else {
+          window.open(viewerUrl, '_blank');
+        }
+      } else {
+        // Для остальных файлов используем обычный просмотр
+        const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
+        window.open(viewerUrl, '_blank');
+      }
     },
     async downloadDocument(doc) {
       try {
@@ -171,6 +187,10 @@ export default {
     },
     getFileName(filePath) {
       const parts = filePath.split('/');
+      return parts[parts.length - 1];
+    },
+    getFileExtension(filePath) {
+      const parts = filePath.split('.');
       return parts[parts.length - 1];
     }
   }
