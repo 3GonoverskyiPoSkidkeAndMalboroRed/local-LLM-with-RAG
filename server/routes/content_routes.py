@@ -904,11 +904,24 @@ def get_mime_type(file_path):
     mime_type, _ = mimetypes.guess_type(file_path)
     return mime_type or 'application/octet-stream'
 
+@router.options("/download-file/{content_id}")
+async def download_file_options(content_id: int):
+    """Обработчик OPTIONS запросов для CORS"""
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
+
 @router.get("/download-file/{content_id}")
 @limiter.limit("50/minute")  # ✅ Умеренный лимит для скачивания
 async def download_file(
     request: Request,
     content_id: int,
+    user_id: Optional[int] = Query(None, description="ID пользователя (опционально)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -917,9 +930,17 @@ async def download_file(
     if content is None:
         raise HTTPException(status_code=404, detail="Контент не найден")
 
-    # Проверяем права доступа текущего пользователя
-    if not (is_admin(current_user) or (
-        current_user.access_id == content.access_level and current_user.department_id == content.department_id
+    # Определяем пользователя для проверки прав доступа
+    user_to_check = current_user
+    if user_id is not None:
+        # Если передан user_id, получаем пользователя из базы
+        user_to_check = db.query(User).filter(User.id == user_id).first()
+        if not user_to_check:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Проверяем права доступа пользователя
+    if not (is_admin(user_to_check) or (
+        user_to_check.access_id == content.access_level and user_to_check.department_id == content.department_id
     )):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для скачивания файла")
 
@@ -947,7 +968,6 @@ async def download_file(
         filename_encoded = filename.encode('latin-1').decode('latin-1')
     except UnicodeEncodeError:
         # Если не получается, используем URL-кодирование
-        import urllib.parse
         filename_encoded = urllib.parse.quote(filename)
     
     # Возвращаем файл как ответ с правильным MIME-типом
@@ -956,7 +976,10 @@ async def download_file(
         media_type=mime_type, 
         filename=filename_encoded,
         headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"
+            "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
         }
     )
 
