@@ -355,7 +355,7 @@ export default {
       }
     },
 
-    viewOriginalDocument(source) {
+    async viewOriginalDocument(source) {
       // Получаем информацию о документе из источника
       const documentId = source.document_id || source.content_id;
       const userQuery = this.getLastUserQuery();
@@ -368,37 +368,40 @@ export default {
         return;
       }
       
-      // Определяем тип файла для выбора правильного способа просмотра
-      const fileName = source.file_name || '';
-      const fileExtension = fileName.toLowerCase().split('.').pop() || '';
-      const supportedTextFormats = ['txt', 'md', 'html'];
-      
-      if (supportedTextFormats.includes(fileExtension)) {
-        // Для текстовых файлов используем просмотр с выделением
-        const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer-with-highlight/${documentId}`;
-        let fullUrl = viewerUrl;
+      try {
+        // Получаем временный токен для просмотра документа
+        const tokenResponse = await axios.get(`${import.meta.env.VITE_API_URL}/content/view-token/${documentId}`);
+        const viewToken = tokenResponse.data.view_token;
         
-        if (userQuery) {
-          // Передаем поисковый запрос для выделения
+        // Определяем тип файла для выбора правильного способа просмотра
+        const fileName = source.file_name || '';
+        const fileExtension = fileName.toLowerCase().split('.').pop() || '';
+        const supportedTextFormats = ['txt', 'md', 'html'];
+        
+        // Формируем URL для публичного просмотра
+        let viewerUrl = `${import.meta.env.VITE_API_URL}/content/public-view/${documentId}?token=${viewToken}`;
+        
+        if (supportedTextFormats.includes(fileExtension) && userQuery) {
+          // Для текстовых файлов добавляем поисковый запрос для выделения
           const encodedQuery = encodeURIComponent(userQuery);
-          fullUrl += `?search_query=${encodedQuery}`;
+          viewerUrl += `&search_query=${encodedQuery}`;
         }
         
         // Открываем в новой вкладке
-        window.open(fullUrl, '_blank');
-        
-        this.showNotification({
-          type: 'success',
-          message: 'Документ открыт в новой вкладке с выделением найденного отрывка'
-        });
-      } else {
-        // Для остальных файлов используем обычный просмотр
-        const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer/${documentId}`;
         window.open(viewerUrl, '_blank');
         
         this.showNotification({
           type: 'success',
-          message: 'Документ открыт в новой вкладке'
+          message: supportedTextFormats.includes(fileExtension) && userQuery 
+            ? 'Документ открыт в новой вкладке с выделением найденного отрывка'
+            : 'Документ открыт в новой вкладке'
+        });
+        
+      } catch (error) {
+        console.error('Ошибка при открытии документа:', error);
+        this.showNotification({
+          type: 'error',
+          message: 'Ошибка при открытии документа. Проверьте права доступа.'
         });
       }
     },

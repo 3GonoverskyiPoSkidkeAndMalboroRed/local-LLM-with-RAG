@@ -1531,10 +1531,148 @@ async def public_view_document(
         base_url = str(request.base_url).rstrip('/')
         download_url = f"{base_url}/content/public-download/{content_id}?token={token}"
         
-        # Поддерживаемые форматы для Google Docs Viewer
-        supported_formats = ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf']
+        # Поддерживаемые форматы для просмотра с выделением
+        text_formats = ['txt', 'md', 'html']
         
-        if file_extension in supported_formats:
+        # Поддерживаемые форматы для Google Docs Viewer
+        supported_formats = ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'rtf']
+        
+        if file_extension in text_formats:
+            # Для текстовых файлов используем просмотр с выделением
+            try:
+                file_path = os.path.join("documents", content.file_path)
+                if os.path.exists(file_path):
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        file_content = f.read()
+                else:
+                    file_content = f"Файл {content.file_path} не найден на сервере."
+            except Exception as e:
+                file_content = f"Ошибка при чтении файла: {str(e)}"
+            
+            # Выделяем найденные отрывки, если есть поисковый запрос
+            if search_query:
+                import re
+                pattern = re.compile(f'({re.escape(search_query)})', re.IGNORECASE)
+                file_content = pattern.sub(r'<mark>\1</mark>', file_content)
+            
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{content.title} - Просмотр документа</title>
+                <style>
+                    body {{
+                        margin: 0;
+                        padding: 0;
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background-color: #f8f9fa;
+                    }}
+                    .header {{
+                        background: #ffffff;
+                        padding: 15px 20px;
+                        border-bottom: 1px solid #dee2e6;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }}
+                    .header h1 {{
+                        margin: 0;
+                        font-size: 20px;
+                        color: #333;
+                        font-weight: 600;
+                    }}
+                    .header .controls {{
+                        display: flex;
+                        gap: 10px;
+                    }}
+                    .btn {{
+                        padding: 8px 16px;
+                        border: none;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        text-decoration: none;
+                        font-size: 14px;
+                        font-weight: 500;
+                        transition: all 0.3s ease;
+                    }}
+                    .btn-primary {{
+                        background: #007bff;
+                        color: white;
+                    }}
+                    .btn-primary:hover {{
+                        background: #0056b3;
+                    }}
+                    .btn-secondary {{
+                        background: #6c757d;
+                        color: white;
+                    }}
+                    .btn-secondary:hover {{
+                        background: #545b62;
+                    }}
+                    .content-info {{
+                        background: #e7f3ff;
+                        border: 1px solid #b3d9ff;
+                        color: #004085;
+                        padding: 12px 20px;
+                        border-radius: 6px;
+                        margin: 15px 20px;
+                        font-size: 14px;
+                    }}
+                    .document-content {{
+                        background: white;
+                        margin: 15px 20px;
+                        padding: 30px;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        line-height: 1.6;
+                        font-size: 16px;
+                        white-space: pre-wrap;
+                        word-wrap: break-word;
+                        max-height: calc(100vh - 200px);
+                        overflow-y: auto;
+                    }}
+                    mark {{
+                        background-color: #ffeb3b;
+                        color: #000;
+                        padding: 2px 4px;
+                        border-radius: 3px;
+                        font-weight: bold;
+                    }}
+                    .search-info {{
+                        background: #fff3cd;
+                        border: 1px solid #ffeaa7;
+                        color: #856404;
+                        padding: 10px 20px;
+                        border-radius: 6px;
+                        margin: 15px 20px;
+                        font-size: 14px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>{content.title}</h1>
+                    <div class="controls">
+                        <a href="{download_url}" class="btn btn-primary" download>Скачать</a>
+                        <button onclick="window.close()" class="btn btn-secondary">Закрыть</button>
+                    </div>
+                </div>
+                <div class="content-info">
+                    <strong>Формат файла:</strong> {file_extension.upper()}
+                    <br><strong>Размер:</strong> {len(file_content)} символов
+                    {f'<br><strong>Поисковый запрос:</strong> {search_query}' if search_query else ''}
+                </div>
+                {f'<div class="search-info"><strong>Найдено выделений:</strong> {file_content.count("<mark>")} совпадений</div>' if search_query else ''}
+                <div class="document-content">{file_content}</div>
+            </body>
+            </html>
+            """
+            
+            return HTMLResponse(content=html_content)
+        elif file_extension in supported_formats:
             # Используем Google Docs Viewer для поддерживаемых форматов
             google_docs_url = f"https://docs.google.com/viewer?url={download_url}&embedded=true"
             
