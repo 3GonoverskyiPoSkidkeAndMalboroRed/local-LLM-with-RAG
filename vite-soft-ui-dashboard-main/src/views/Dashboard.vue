@@ -333,7 +333,7 @@ export default {
         this.openFolders.push(folderId);
       }
     },
-    viewDocument(doc) {
+    async viewDocument(doc) {
       const fileExtension = this.getFileExtension(doc.file_path);
       
       // Проверяем, является ли файл аудио или видео
@@ -356,15 +356,26 @@ export default {
         // Открываем модальное окно
         this.mediaPlayerModal.show();
       } else {
-        // Проверяем, является ли файл текстовым для просмотра с выделением
-        const supportedTextFormats = ['txt', 'md', 'html'];
-        
-        if (supportedTextFormats.includes(fileExtension)) {
-          // Для текстовых файлов используем просмотр с выделением
-          const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer-with-highlight/${doc.id}`;
-          window.open(viewerUrl, '_blank');
-        } else {
-          // Для остальных файлов используем Google Docs Viewer
+        try {
+          // Получаем токен для просмотра документа
+          const tokenResponse = await axiosInstance.get(`/content/view-token/${doc.id}`);
+          const viewToken = tokenResponse.data.view_token;
+          
+          // Проверяем, является ли файл текстовым для просмотра с выделением
+          const supportedTextFormats = ['txt', 'md', 'html'];
+          
+          if (supportedTextFormats.includes(fileExtension)) {
+            // Для текстовых файлов используем просмотр с выделением
+            const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer-with-highlight/${doc.id}`;
+            window.open(viewerUrl, '_blank');
+          } else {
+            // Для остальных файлов используем публичный просмотр с токеном
+            const viewerUrl = `${axiosInstance.defaults.baseURL}/content/public-view/${doc.id}?token=${viewToken}`;
+            window.open(viewerUrl, '_blank');
+          }
+        } catch (error) {
+          console.error("Ошибка при получении токена для просмотра:", error);
+          // Fallback к старому методу
           const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
           window.open(viewerUrl, '_blank');
         }
@@ -407,7 +418,16 @@ export default {
     async copyLink(docId, action) {
       let url;
       if (action === 'view') {
-        url = `${axiosInstance.defaults.baseURL}/content/document-viewer/${docId}`;
+        try {
+          // Получаем токен для просмотра
+          const tokenResponse = await axiosInstance.get(`/content/view-token/${docId}`);
+          const viewToken = tokenResponse.data.view_token;
+          url = `${axiosInstance.defaults.baseURL}/content/public-view/${docId}?token=${viewToken}`;
+        } catch (error) {
+          console.error("Ошибка при получении токена для копирования ссылки просмотра:", error);
+          // Fallback к старому методу
+          url = `${axiosInstance.defaults.baseURL}/content/document-viewer/${docId}`;
+        }
       } else {
         try {
           // Получаем токен для скачивания

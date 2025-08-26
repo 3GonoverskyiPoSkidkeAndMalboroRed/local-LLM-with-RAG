@@ -130,23 +130,33 @@ export default {
         } 
       });
     },
-    viewDocument(doc) {
-      // Используем новый функционал просмотра с выделением для текстовых файлов
-      const fileExtension = this.getFileExtension(doc.file_path);
-      const supportedTextFormats = ['txt', 'md', 'html'];
-      
-      if (supportedTextFormats.includes(fileExtension)) {
-        // Для текстовых файлов используем просмотр с выделением
-        const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer-with-highlight/${doc.id}`;
-        if (this.searchQuery) {
-          // Если есть поисковый запрос, передаем его для выделения
-          const encodedQuery = encodeURIComponent(this.searchQuery);
-          window.open(`${viewerUrl}?search_query=${encodedQuery}`, '_blank');
+    async viewDocument(doc) {
+      try {
+        // Получаем токен для просмотра документа
+        const tokenResponse = await axiosInstance.get(`/content/view-token/${doc.id}`);
+        const viewToken = tokenResponse.data.view_token;
+        
+        // Используем новый функционал просмотра с выделением для текстовых файлов
+        const fileExtension = this.getFileExtension(doc.file_path);
+        const supportedTextFormats = ['txt', 'md', 'html'];
+        
+        if (supportedTextFormats.includes(fileExtension)) {
+          // Для текстовых файлов используем просмотр с выделением
+          let viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer-with-highlight/${doc.id}`;
+          if (this.searchQuery) {
+            // Если есть поисковый запрос, передаем его для выделения
+            const encodedQuery = encodeURIComponent(this.searchQuery);
+            viewerUrl += `?search_query=${encodedQuery}`;
+          }
+          window.open(viewerUrl, '_blank');
         } else {
+          // Для остальных файлов используем публичный просмотр с токеном
+          const viewerUrl = `${axiosInstance.defaults.baseURL}/content/public-view/${doc.id}?token=${viewToken}`;
           window.open(viewerUrl, '_blank');
         }
-      } else {
-        // Для остальных файлов используем обычный просмотр
+      } catch (error) {
+        console.error("Ошибка при получении токена для просмотра:", error);
+        // Fallback к старому методу
         const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer/${doc.id}`;
         window.open(viewerUrl, '_blank');
       }

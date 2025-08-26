@@ -1430,3 +1430,254 @@ async def list_all_departments(request: Request, ):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении списка отделов: {str(e)}") 
+
+@router.get("/view-token/{content_id}")
+@limiter.limit("50/minute")  # ✅ Умеренный лимит для получения токенов
+async def get_view_token(
+    request: Request,
+    content_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Генерирует временный токен для просмотра документа
+    """
+    # Получаем контент из базы данных по ID
+    content = db.query(Content).filter(Content.id == content_id).first()
+    if content is None:
+        raise HTTPException(status_code=404, detail="Контент не найден")
+
+    # Проверяем права доступа текущего пользователя
+    if not (is_admin(current_user) or (
+        current_user.access_id == content.access_level and current_user.department_id == content.department_id
+    )):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра документа")
+
+    # Генерируем временный токен
+    import base64
+    import json
+    from datetime import datetime
+    
+    token_data = {
+        'user_id': current_user.id,
+        'content_id': content_id,
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    token = base64.b64encode(json.dumps(token_data).encode('utf-8')).decode('utf-8')
+    
+    return {"view_token": token}
+
+
+@router.get("/public-view/{content_id}")
+@limiter.limit("100/minute")  # ✅ Высокий лимит для просмотра документов
+async def public_view_document(
+    request: Request,
+    content_id: int,
+    token: str = Query(..., description="Временный токен для просмотра"),
+    search_query: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Публичный эндпоинт для просмотра документов с временным токеном.
+    Используется для просмотра через window.open
+    """
+    try:
+        # Декодируем токен
+        import base64
+        import json
+        from datetime import datetime, timedelta
+        
+        try:
+            # Декодируем токен
+            decoded_token = base64.b64decode(token).decode('utf-8')
+            token_data = json.loads(decoded_token)
+            
+            # Проверяем срок действия токена (1 час)
+            token_time = datetime.fromisoformat(token_data['timestamp'])
+            if datetime.now() - token_time > timedelta(hours=1):
+                raise HTTPException(status_code=401, detail="Токен истек")
+                
+            user_id = token_data['user_id']
+            content_id_from_token = token_data['content_id']
+            
+            # Проверяем соответствие content_id
+            if content_id_from_token != content_id:
+                raise HTTPException(status_code=401, detail="Неверный токен")
+                
+        except Exception as e:
+            raise HTTPException(status_code=401, detail="Неверный токен")
+        
+        # Получаем пользователя
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="Пользователь не найден")
+        
+        # Получаем контент из базы данных
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if not content:
+            raise HTTPException(status_code=404, detail="Документ не найден")
+        
+        # Проверяем доступ пользователя к документу
+        if not (is_admin(user) or (
+            user.access_id == content.access_level and user.department_id == content.department_id
+        )):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра документа")
+
+        # Получаем расширение файла
+        file_extension = content.file_path.lower().split('.')[-1] if '.' in content.file_path else ''
+        
+        # Определяем URL для скачивания файла
+        base_url = str(request.base_url).rstrip('/')
+        download_url = f"{base_url}/content/public-download/{content_id}?token={token}"
+        
+        # Поддерживаемые форматы для Google Docs Viewer
+        supported_formats = ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf']
+        
+        if file_extension in supported_formats:
+            # Используем Google Docs Viewer для поддерживаемых форматов
+            google_docs_url = f"https://docs.google.com/viewer?url={download_url}&embedded=true"
+            
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{content.title} - Просмотр документа</title>
+                <style>
+                    body {{
+                        margin: 0;
+                        padding: 0;
+                        font-family: Arial, sans-serif;
+                        background-color: #f5f5f5;
+                    }}
+                    .header {{
+                        background: #f8f9fa;
+                        padding: 15px 20px;
+                        border-bottom: 1px solid #dee2e6;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    }}
+                    .header h1 {{
+                        margin: 0;
+                        font-size: 18px;
+                        color: #333;
+                    }}
+                    .header .controls {{
+                        display: flex;
+                        gap: 10px;
+                    }}
+                    .btn {{
+                        padding: 8px 16px;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        text-decoration: none;
+                        font-size: 14px;
+                    }}
+                    .btn-primary {{
+                        background: #007bff;
+                        color: white;
+                    }}
+                    .btn-secondary {{
+                        background: #6c757d;
+                        color: white;
+                    }}
+                    .google-docs-info {{
+                        background: #fff3cd;
+                        border: 1px solid #ffeaa7;
+                        color: #856404;
+                        padding: 10px;
+                        border-radius: 4px;
+                        margin: 10px 20px;
+                    }}
+                    #viewer {{
+                        width: 100%;
+                        height: calc(100vh - 80px);
+                        border: none;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>{content.title}</h1>
+                    <div class="controls">
+                        <a href="{download_url}" class="btn btn-primary" download>Скачать</a>
+                        <button onclick="window.close()" class="btn btn-secondary">Закрыть</button>
+                    </div>
+                </div>
+                <div class="google-docs-info">
+                    <strong>Информация:</strong> Документ отображается через Google Docs Viewer. 
+                    Если документ не загружается, попробуйте скачать его.
+                </div>
+                <iframe id="viewer" src="{google_docs_url}"></iframe>
+            </body>
+            </html>
+            """
+            
+            return HTMLResponse(content=html_content)
+        else:
+            # Для неподдерживаемых форматов предлагаем скачать
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="ru">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{content.title} - Скачать документ</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        text-align: center;
+                        padding: 50px;
+                        background-color: #f5f5f5;
+                    }}
+                    .container {{
+                        background: white;
+                        padding: 30px;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        max-width: 500px;
+                        margin: 0 auto;
+                    }}
+                    .btn {{
+                        padding: 12px 24px;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        text-decoration: none;
+                        font-size: 16px;
+                        margin: 10px;
+                    }}
+                    .btn-primary {{
+                        background: #007bff;
+                        color: white;
+                    }}
+                    .btn-secondary {{
+                        background: #6c757d;
+                        color: white;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>{content.title}</h2>
+                    <p>Формат файла (.{file_extension}) не поддерживается для просмотра в браузере.</p>
+                    <p>Пожалуйста, скачайте файл для просмотра.</p>
+                    <div>
+                        <a href="{download_url}" class="btn btn-primary" download>Скачать документ</a>
+                        <button onclick="window.close()" class="btn btn-secondary">Закрыть</button>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            return HTMLResponse(content=html_content)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при создании страницы просмотра: {str(e)}") 
