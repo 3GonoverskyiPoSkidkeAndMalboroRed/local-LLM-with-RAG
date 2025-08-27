@@ -9,7 +9,7 @@ def run_migration():
     """Выполняет миграцию для создания таблиц RAG системы"""
     
     # Настройки подключения к базе данных
-    DATABASE_URL = os.environ.get("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3306/db_main")
+    DATABASE_URL = os.environ.get("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3307/db_main")
     
     engine = create_engine(DATABASE_URL)
     
