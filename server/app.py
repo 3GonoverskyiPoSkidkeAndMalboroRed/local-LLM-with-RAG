@@ -19,7 +19,7 @@ import secrets
 from typing import List
 from fastapi.responses import FileResponse
 
-from models_db import User, Department, Access, Content, Tag
+from models_db import User, Department, Access, Role, Content, Tag
 from document_loader import load_documents_into_database, vec_search
 import argparse
 import sys
@@ -180,6 +180,12 @@ async def get_departments(request: Request, db: Session = Depends(get_db)):
 async def get_access_levels(request: Request, db: Session = Depends(get_db)):
     access_levels = db.query(Access).all()
     return [{"id": access_level.id, "access_name": access_level.access_name} for access_level in access_levels]
+
+@app.get("/api/roles")
+@limiter.limit("60/minute")  # ✅ Умеренный лимит для справочных данных
+async def get_roles(request: Request, db: Session = Depends(get_db)):
+    roles = db.query(Role).all()
+    return [{"id": role.id, "role_name": role.role_name} for role in roles]
 
 @app.get("/departments")
 @limiter.limit("60/minute")  # ✅ Умеренный лимит для справочных данных

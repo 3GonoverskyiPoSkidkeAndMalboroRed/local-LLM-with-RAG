@@ -58,8 +58,9 @@
                     <div class="col-md-4 mb-3">
                       <label for="role" class="form-label">Роль</label>
                       <select class="form-select" id="role" v-model="registerForm.role_id" required>
-                        <option value="1">Администратор</option>
-                        <option value="2">Пользователь</option>
+                        <option v-for="role in roles" :key="role.id" :value="role.id">
+                          {{ role.role_name }}
+                        </option>
                       </select>
                     </div>
                   </div>
@@ -802,6 +803,7 @@ export default {
       // Списки для выпадающих меню
       departments: [],
       accessLevels: [],
+      roles: [],
       llmModels: [],
       embeddingModels: [],
       tags: [],
@@ -864,6 +866,7 @@ export default {
   async created() {
     await this.fetchDepartments();
     await this.fetchAccessLevels();
+    await this.fetchRoles();
     await this.fetchLLMModels();
     await this.fetchEmbeddingModels();
     await this.fetchTags();
@@ -896,6 +899,17 @@ export default {
       } catch (error) {
         console.error('Ошибка при получении отделов:', error);
         this.accessLevels = [];
+      }
+    },
+    
+    // Получение списка ролей
+    async fetchRoles() {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/roles`);
+        this.roles = response.data;
+      } catch (error) {
+        console.error('Ошибка при получении ролей:', error);
+        this.roles = [];
       }
     },
     

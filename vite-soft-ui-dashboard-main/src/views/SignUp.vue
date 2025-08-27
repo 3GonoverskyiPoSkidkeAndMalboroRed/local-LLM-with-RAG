@@ -99,6 +99,30 @@
               <div class="mb-3">
                 <vsud-input type="password" placeholder="Пароль" aria-label="Password" v-model="password" />
               </div>
+              <div class="mb-3">
+                <label class="form-label text-white">Роль</label>
+                <select class="form-select" v-model="selectedRole" required>
+                  <option v-for="role in roles" :key="role.id" :value="role.id">
+                    {{ role.role_name }}
+                  </option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label text-white">Отдел</label>
+                <select class="form-select" v-model="selectedDepartment" required>
+                  <option v-for="department in departments" :key="department.id" :value="department.id">
+                    {{ department.department_name }}
+                  </option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label text-white">Уровень доступа</label>
+                <select class="form-select" v-model="selectedAccess" required>
+                  <option v-for="access in accessLevels" :key="access.id" :value="access.id">
+                    {{ access.access_name }}
+                  </option>
+                </select>
+              </div>
               <div v-if="errorMessage" class="alert alert-danger text-white" role="alert">
                 {{ errorMessage }}
               </div>
@@ -154,7 +178,13 @@ export default {
       login: "",
       password: "",
       termsAccepted: false,
-      errorMessage: ""
+      errorMessage: "",
+      roles: [],
+      departments: [],
+      accessLevels: [],
+      selectedRole: 2, // По умолчанию обычный пользователь
+      selectedDepartment: null,
+      selectedAccess: null
     }
   },
   setup() {
@@ -162,6 +192,33 @@ export default {
     return { router };
   },
   methods: {
+    // Загрузка справочных данных
+    async loadReferenceData() {
+      try {
+        // Загружаем роли
+        const rolesResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/roles`);
+        this.roles = rolesResponse.data;
+        
+        // Загружаем отделы
+        const departmentsResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/departments`);
+        this.departments = departmentsResponse.data;
+        
+        // Загружаем уровни доступа
+        const accessResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/access_levels`);
+        this.accessLevels = accessResponse.data;
+        
+        // Устанавливаем значения по умолчанию
+        if (this.departments.length > 0) {
+          this.selectedDepartment = this.departments[0].id;
+        }
+        if (this.accessLevels.length > 0) {
+          this.selectedAccess = this.accessLevels[0].id;
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки справочных данных:', error);
+      }
+    },
+    
     async handleRegister() {
       if (!this.login || !this.password) {
         this.errorMessage = "Пожалуйста, заполните все поля";
@@ -178,9 +235,9 @@ export default {
         const response = await axios.post(`${import.meta.env.VITE_API_URL}/register`, {
           login: this.login,
           password: this.password,
-          role_id: 1,
-          department_id: 5,
-          access_id: 3
+          role_id: this.selectedRole,
+          department_id: this.selectedDepartment,
+          access_id: this.selectedAccess
         });
         
         
@@ -192,11 +249,14 @@ export default {
       }
     }
   },
-  created() {
+  async created() {
     this.$store.state.hideConfigButton = true;
     this.$store.state.showNavbar = false;
     this.$store.state.showSidenav = false;
     this.$store.state.showFooter = false;
+    
+    // Загружаем справочные данные
+    await this.loadReferenceData();
   },
   beforeUnmount() {
     this.$store.state.hideConfigButton = false;

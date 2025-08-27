@@ -40,6 +40,12 @@ class Access(Base):
     id = Column(Integer, primary_key=True, index=True)
     access_name = Column(String(50), unique=True, nullable=False)  # Название уровня доступа
 
+class Role(Base):
+    __tablename__ = "role"
+
+    id = Column(Integer, primary_key=True, index=True)
+    role_name = Column(String(45), nullable=False)
+
 class Content(Base):
     __tablename__ = "content"
 
