@@ -73,7 +73,7 @@ app.include_router(web_search_router)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Настройки подключения к базе данных
-DATABASE_URL = os.environ.get("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3306/db_test")
+DATABASE_URL = os.environ.get("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3306/db_main")
 
 # Создание движка и сессии
 engine = create_engine(DATABASE_URL)

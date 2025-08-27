@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 import os
 
 # Настройки подключения к базе данных
-DATABASE_URL = os.getenv("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3307/db_test")
+DATABASE_URL = os.getenv("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3307/db_main")
 
 # Создание движка базы данных
 engine = create_engine(DATABASE_URL)

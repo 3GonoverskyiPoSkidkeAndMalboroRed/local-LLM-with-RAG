@@ -9,7 +9,7 @@ def run_migration():
     """Выполняет миграцию для добавления колонки images"""
     
     # Настройки подключения к базе данных
-    DATABASE_URL = os.environ.get("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3306/db_test")
+    DATABASE_URL = os.environ.get("DATABASE_URL", "mysql+mysqlconnector://root:123123@localhost:3306/db_main")
     
     engine = create_engine(DATABASE_URL)
     
@@ -26,7 +26,7 @@ def run_migration():
             check_column = """
             SELECT COUNT(*) as count 
             FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_SCHEMA = 'db_test' 
+            WHERE TABLE_SCHEMA = 'db_main' 
             AND TABLE_NAME = 'document_chunks' 
             AND COLUMN_NAME = 'images';
             """

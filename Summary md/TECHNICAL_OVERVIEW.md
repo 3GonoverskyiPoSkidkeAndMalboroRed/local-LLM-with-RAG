@@ -223,7 +223,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=mysql+mysqlconnector://root:password@db:3306/db_test
+      - DATABASE_URL=mysql+mysqlconnector://root:password@db:3306/db_main
       - YANDEX_API_KEY=${YANDEX_API_KEY}
       - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID}
     
@@ -236,7 +236,7 @@ services:
     image: mysql:8.0
     environment:
       - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_DATABASE=db_test
+      - MYSQL_DATABASE=db_main
     volumes:
       - mysql_data:/var/lib/mysql
 
@@ -273,7 +273,7 @@ VITE_API_URL=http://localhost:8000
 ### Стратегия бэкапов
 ```bash
 # Ежедневный бэкап базы данных
-mysqldump -u root -p db_test > backup_$(date +%Y%m%d).sql
+mysqldump -u root -p db_main > backup_$(date +%Y%m%d).sql
 
 # Бэкап файлов
 tar -czf files_backup_$(date +%Y%m%d).tar.gz /app/files/
@@ -285,7 +285,7 @@ tar -czf vector_backup_$(date +%Y%m%d).tar.gz /app/files/vector_db/
 ### Восстановление
 ```bash
 # Восстановление БД
-mysql -u root -p db_test < backup_20240101.sql
+mysql -u root -p db_main < backup_20240101.sql
 
 # Восстановление файлов
 tar -xzf files_backup_20240101.tar.gz -C /
