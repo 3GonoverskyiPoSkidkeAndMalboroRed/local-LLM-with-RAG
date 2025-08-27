@@ -40,6 +40,13 @@
         </sidenav-collapse>
       </li>
       <li class="nav-item">
+        <sidenav-collapse nav-text="Предложения контента" :to="{ name: 'Proposals' }">
+          <template #icon>
+            <i class="fas fa-file-upload text-warning"></i>
+          </template>
+        </sidenav-collapse>
+      </li>
+      <li class="nav-item">
         <sidenav-collapse nav-text="Чат" :to="{ name: 'Billing' }">
           <!-- <template #icon>
             <icon name="billing" />

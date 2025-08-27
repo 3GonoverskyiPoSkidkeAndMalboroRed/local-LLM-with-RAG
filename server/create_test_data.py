@@ -20,42 +20,33 @@ def create_test_data():
     db = next(get_db())
     
     try:
-        # 1. Создаем отделы
+        # 1. Создаем отделы (только если их нет)
         print("📁 Создание отделов...")
-        departments = [
-            Department(department_name="IT отдел"),
-            Department(department_name="HR отдел"),
-            Department(department_name="Финансовый отдел"),
-            Department(department_name="Маркетинг"),
-            Department(department_name="Общий отдел")
-        ]
+        department_names = ["IT отдел", "HR отдел", "Финансовый отдел", "Маркетинг", "Общий отдел"]
         
-        for dept in departments:
-            existing = db.query(Department).filter(Department.department_name == dept.department_name).first()
+        for dept_name in department_names:
+            existing = db.query(Department).filter(Department.department_name == dept_name).first()
             if not existing:
+                dept = Department(department_name=dept_name)
                 db.add(dept)
-                print(f"   ✅ Создан отдел: {dept.department_name}")
+                print(f"   ✅ Создан отдел: {dept_name}")
             else:
-                print(f"   ⚠️ Отдел уже существует: {dept.department_name}")
+                print(f"   ⚠️ Отдел уже существует: {dept_name}")
         
         db.commit()
         
-        # 2. Создаем уровни доступа
+        # 2. Создаем уровни доступа (только если их нет)
         print("🔐 Создание уровней доступа...")
-        accesses = [
-            Access(access_name="Публичный"),
-            Access(access_name="Внутренний"),
-            Access(access_name="Конфиденциальный"),
-            Access(access_name="Секретный")
-        ]
+        access_names = ["Публичный", "Внутренний", "Конфиденциальный", "Секретный"]
         
-        for access in accesses:
-            existing = db.query(Access).filter(Access.access_name == access.access_name).first()
+        for access_name in access_names:
+            existing = db.query(Access).filter(Access.access_name == access_name).first()
             if not existing:
+                access = Access(access_name=access_name)
                 db.add(access)
-                print(f"   ✅ Создан уровень доступа: {access.access_name}")
+                print(f"   ✅ Создан уровень доступа: {access_name}")
             else:
-                print(f"   ⚠️ Уровень доступа уже существует: {access.access_name}")
+                print(f"   ⚠️ Уровень доступа уже существует: {access_name}")
         
         db.commit()
         
@@ -85,6 +76,38 @@ def create_test_data():
                 "department_id": 2,  # HR отдел
                 "access_id": 2,  # Внутренний
                 "full_name": "Иван Иванов"
+            },
+            {
+                "login": "head_it",
+                "password": "head123",
+                "role_id": 3,  # Глава отдела
+                "department_id": 1,  # IT отдел
+                "access_id": 2,  # Внутренний
+                "full_name": "Глава IT отдела"
+            },
+            {
+                "login": "head_hr",
+                "password": "head123",
+                "role_id": 3,  # Глава отдела
+                "department_id": 2,  # HR отдел
+                "access_id": 2,  # Внутренний
+                "full_name": "Глава HR отдела"
+            },
+            {
+                "login": "resp_it",
+                "password": "resp123",
+                "role_id": 4,  # Ответственный отдела
+                "department_id": 1,  # IT отдел
+                "access_id": 2,  # Внутренний
+                "full_name": "Ответственный IT отдела"
+            },
+            {
+                "login": "resp_hr",
+                "password": "resp123",
+                "role_id": 4,  # Ответственный отдела
+                "department_id": 2,  # HR отдел
+                "access_id": 2,  # Внутренний
+                "full_name": "Ответственный HR отдела"
             }
         ]
         

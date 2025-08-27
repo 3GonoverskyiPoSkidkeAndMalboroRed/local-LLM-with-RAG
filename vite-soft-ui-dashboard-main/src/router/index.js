@@ -12,6 +12,7 @@ import LibraryPage from "@/views/LibraryPage.vue";
 import TagContentPage from "@/views/TagContentPage.vue";
 import store from "@/store";
 import Feedback from "@/views/Feedback.vue";
+import Proposals from "@/views/Proposals.vue";
 
 const routes = [
   {
@@ -89,6 +90,12 @@ const routes = [
     path: "/feedback",
     name: "Feedback",
     component: Feedback,
+  },
+  {
+    path: "/proposals",
+    name: "Proposals",
+    component: Proposals,
+    meta: { requiresAuth: true }
   },
 ];
 

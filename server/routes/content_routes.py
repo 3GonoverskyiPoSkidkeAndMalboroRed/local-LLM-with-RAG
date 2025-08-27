@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models_db import Access, Content, User, Tag
 from routes.user_routes import get_current_user, require_admin, is_admin
+from utils.permissions import PermissionChecker
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from typing import List, Optional
@@ -51,10 +52,8 @@ async def get_document_viewer_page(
         if not content:
             raise HTTPException(status_code=404, detail="Документ не найден")
         
-        # Проверяем доступ пользователя к документу - упрощенная проверка
-        if not (is_admin(current_user) or (
-            current_user.access_id == content.access_level and current_user.department_id == content.department_id
-        )):
+        # Проверяем доступ пользователя к документу
+        if not PermissionChecker.can_view_content(current_user, content):
             # Логируем для отладки
             print(f"Access denied for user {current_user.id} to content {content_id}")
             print(f"User access_id: {current_user.access_id}, content access_level: {content.access_level}")

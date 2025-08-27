@@ -79,15 +79,27 @@ async def get_current_user(
     return user
 
 
-# Админ-помощники
-def is_admin(user: User) -> bool:
-    # Принято считать роль администратора role_id = 1
-    return int(user.role_id or 0) == 1
+# Импортируем новый модуль разрешений
+from utils.permissions import PermissionChecker
 
+# Админ-помощники (для обратной совместимости)
+def is_admin(user: User) -> bool:
+    return PermissionChecker.is_admin(user)
 
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if not is_admin(current_user):
+    if not PermissionChecker.is_admin(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ только для администраторов")
+    return current_user
+
+# Новые функции для проверки прав
+async def require_department_head(current_user: User = Depends(get_current_user)) -> User:
+    if not PermissionChecker.is_department_head(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ только для глав отделов")
+    return current_user
+
+async def require_content_management(current_user: User = Depends(get_current_user)) -> User:
+    if not PermissionChecker.can_manage_content(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для управления контентом")
     return current_user
 
 class UserCreate(BaseModel):
@@ -99,11 +111,26 @@ class UserCreate(BaseModel):
     full_name: str = None
 
 @router.post("/register")
-async def register(user: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def register(
+    request: Request,
+    user: UserCreate, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Регистрация нового пользователя с проверкой прав"""
+    
     # Проверка существования пользователя
     existing_user = db.query(User).filter(User.login == user.login).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Пользователь уже существует")
+
+    # Проверяем права на создание пользователей
+    if not PermissionChecker.can_manage_users(current_user, user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав для создания пользователей"
+        )
 
     # Хеширование пароля
     hashed_password = pwd_context.hash(user.password)
@@ -211,12 +238,23 @@ async def read_current_user(
         "id": current_user.id,
         "login": current_user.login,
         "role_id": current_user.role_id,
+        "role_name": PermissionChecker.get_user_role_name(current_user),
         "department_id": current_user.department_id,
         "department_name": department_name,
         "access_id": current_user.access_id,
         "access_name": access_name,
         "full_name": current_user.full_name,
+        "permissions": PermissionChecker.get_user_permissions(current_user)
     }
+
+@router.get("/permissions")
+@limiter.limit("60/minute")
+async def get_user_permissions(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Получение разрешений текущего пользователя"""
+    return PermissionChecker.get_user_permissions(current_user)
 
 @router.get("/user/{user_id}/content")
 @limiter.limit("100/minute")  # ✅ Высокий лимит для получения контента
@@ -277,10 +315,26 @@ async def get_user_content(
 async def get_users(
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        users = db.query(User).all()  # Получаем всех пользователей из базы данных
+        # Проверяем права на просмотр пользователей
+        if not PermissionChecker.can_manage_users(current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недостаточно прав для просмотра списка пользователей"
+            )
+        
+        # Базовый запрос
+        query = db.query(User)
+        
+        # Фильтруем по правам доступа
+        if not PermissionChecker.is_admin(current_user):
+            if PermissionChecker.is_department_head(current_user):
+                # Глава отдела видит только пользователей своего отдела
+                query = query.filter(User.department_id == current_user.department_id)
+        
+        users = query.all()
         user_list = []
         
         for user in users:
@@ -296,6 +350,7 @@ async def get_users(
                 "id": user.id,
                 "login": user.login,
                 "role_id": user.role_id,
+                "role_name": PermissionChecker.get_user_role_name(user),
                 "department_name": department_name,
                 "access_name": access_name,
                 "full_name": user.full_name

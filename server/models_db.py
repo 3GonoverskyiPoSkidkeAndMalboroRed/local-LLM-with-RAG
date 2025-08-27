@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean, JSON, LargeBinary
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean, JSON, LargeBinary, Enum
 from passlib.context import CryptContext
 from sqlalchemy.sql import func
 
@@ -50,10 +50,38 @@ class Content(Base):
     access_level = Column(Integer, ForeignKey("access.id"), nullable=False)  # Уровень доступа
     department_id = Column(Integer, ForeignKey("department.id"), nullable=False)  # ID отдела
     tag_id = Column(Integer, ForeignKey("tags.id"), nullable=True)  # ID тега
+    creator_id = Column(Integer, ForeignKey("user.id"), nullable=True)  # ID создателя контента
+    status = Column(Enum('active', 'inactive', 'archived', name='content_status'), default='active')  # Статус контента
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
 
     access = relationship("Access")  # Связь с таблицей Access
     department = relationship("Department")  # Связь с таблицей Department
     tag = relationship("Tag")  # Связь с таблицей Tag
+    creator = relationship("User")  # Связь с создателем контента
+
+class ContentProposal(Base):
+    __tablename__ = "content_proposals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)  # Название предлагаемого контента
+    description = Column(Text, nullable=True)  # Описание контента
+    access_level = Column(Integer, ForeignKey("access.id"), nullable=False)  # Уровень доступа
+    department_id = Column(Integer, ForeignKey("department.id"), nullable=False)  # ID отдела
+    tag_id = Column(Integer, ForeignKey("tags.id"), nullable=True)  # ID тега
+    proposed_by = Column(Integer, ForeignKey("user.id"), nullable=False)  # ID пользователя, предложившего контент
+    status = Column(Enum('pending', 'approved', 'rejected', name='proposal_status'), default='pending')  # Статус предложения
+    reviewed_by = Column(Integer, ForeignKey("user.id"), nullable=True)  # ID пользователя, рассмотревшего предложение
+    review_comment = Column(Text, nullable=True)  # Комментарий к решению
+    file_path = Column(String(500), nullable=True)  # Путь к загруженному файлу
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now())
+
+    access = relationship("Access")  # Связь с таблицей Access
+    department = relationship("Department")  # Связь с таблицей Department
+    tag = relationship("Tag")  # Связь с таблицей Tag
+    proposer = relationship("User", foreign_keys=[proposed_by])  # Связь с предложившим
+    reviewer = relationship("User", foreign_keys=[reviewed_by])  # Связь с рассмотревшим
 
 class Tag(Base):
     __tablename__ = "tags"
