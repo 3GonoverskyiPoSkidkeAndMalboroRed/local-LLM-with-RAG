@@ -52,15 +52,6 @@
                     </div>
                     <div class="row">
                       <div class="col-md-6 mb-3">
-                        <label for="department_id" class="form-label">Отдел *</label>
-                        <select class="form-select" id="department_id" v-model="proposalForm.department_id" required>
-                          <option value="">Выберите отдел</option>
-                          <option v-for="dept in departments" :key="dept.id" :value="dept.id">
-                            {{ dept.department_name }}
-                          </option>
-                        </select>
-                      </div>
-                      <div class="col-md-6 mb-3">
                         <label for="tag_id" class="form-label">Тег (необязательно)</label>
                         <select class="form-select" id="tag_id" v-model="proposalForm.tag_id">
                           <option value="">Без тега</option>
@@ -68,6 +59,11 @@
                             {{ tag.tag_name }}
                           </option>
                         </select>
+                      </div>
+                      <div class="col-md-6 mb-3">
+                        <label class="form-label">Отдел</label>
+                        <input type="text" class="form-control" :value="userDepartment" readonly>
+                        <small class="text-muted">Отдел заполняется автоматически</small>
                       </div>
                     </div>
                     <div class="row">
@@ -239,9 +235,9 @@
                 <p v-if="selectedProposal.file_path">
                   <strong>Файл:</strong> {{ getFileName(selectedProposal.file_path) }}
                   <br>
-                                     <a :href="`${apiUrl}/proposals/${selectedProposal.id}/download`" class="btn btn-sm btn-outline-info mt-2">
-                     Скачать файл
-                   </a>
+                  <a :href="`${apiUrl}/proposals/${selectedProposal.id}/download`" class="btn btn-sm btn-outline-info mt-2">
+                    Скачать файл
+                  </a>
                 </p>
                 <p v-else class="text-muted">Файл не прикреплен</p>
                 
@@ -273,7 +269,6 @@ export default {
         title: '',
         description: '',
         access_level: '',
-        department_id: '',
         tag_id: ''
       },
       selectedFile: null,
@@ -283,7 +278,6 @@ export default {
       
       // Данные для списков
       accessLevels: [],
-      departments: [],
       tags: [],
       myProposals: [],
       pendingProposals: [],
@@ -292,14 +286,22 @@ export default {
       selectedProposal: null,
       proposalModal: null,
       
-             // Права пользователя
-       isReviewer: false,
-       
-       userId: localStorage.getItem('userId') || null,
-       
-       // API URL
-       apiUrl: import.meta.env.VITE_API_URL
+      // Права пользователя
+      isReviewer: false,
+      
+      // Данные пользователя
+      userInfo: null,
+      
+      userId: localStorage.getItem('userId') || null,
+      
+      // API URL
+      apiUrl: import.meta.env.VITE_API_URL
     };
+  },
+  computed: {
+    userDepartment() {
+      return this.userInfo?.department_name || 'Загрузка...';
+    }
   },
   mounted() {
     // Проверка авторизации
@@ -319,16 +321,12 @@ export default {
     async loadInitialData() {
       try {
         // Загружаем уровни доступа
-        const accessResponse = await axios.get(`${import.meta.env.VITE_API_URL}/content/access-levels`);
+        const accessResponse = await axios.get(`${import.meta.env.VITE_API_URL}/access-levels`);
         this.accessLevels = accessResponse.data;
         
-        // Загружаем отделы
-        const deptResponse = await axios.get(`${import.meta.env.VITE_API_URL}/directory/departments`);
-        this.departments = deptResponse.data;
-        
         // Загружаем теги
-        const tagsResponse = await axios.get(`${import.meta.env.VITE_API_URL}/content/tags`);
-        this.tags = tagsResponse.data;
+        const tagsResponse = await axios.get(`${import.meta.env.VITE_API_URL}/tags`);
+        this.tags = tagsResponse.data.tags;
       } catch (error) {
         console.error('Ошибка при загрузке данных:', error);
       }
@@ -336,11 +334,11 @@ export default {
     
     async checkUserPermissions() {
       try {
-        const userResponse = await axios.get(`${import.meta.env.VITE_API_URL}/users/me`);
-        const user = userResponse.data;
+        const userResponse = await axios.get(`${import.meta.env.VITE_API_URL}/user/me`);
+        this.userInfo = userResponse.data;
         
         // Проверяем, является ли пользователь рецензентом (глава отдела или админ)
-        this.isReviewer = user.role_id === 1 || user.role_id === 3; // 1 - админ, 3 - глава отдела
+        this.isReviewer = this.userInfo.role_id === 1 || this.userInfo.role_id === 3; // 1 - админ, 3 - глава отдела
         
         if (this.isReviewer) {
           this.loadPendingProposals();
@@ -387,7 +385,7 @@ export default {
         formData.append('title', this.proposalForm.title);
         formData.append('description', this.proposalForm.description);
         formData.append('access_level', this.proposalForm.access_level);
-        formData.append('department_id', this.proposalForm.department_id);
+        formData.append('department_id', this.userInfo.department_id); // Автоматически используем отдел пользователя
         formData.append('tag_id', this.proposalForm.tag_id || '');
         formData.append('file', this.selectedFile);
         
@@ -409,7 +407,6 @@ export default {
           title: '',
           description: '',
           access_level: '',
-          department_id: '',
           tag_id: ''
         };
         this.selectedFile = null;
