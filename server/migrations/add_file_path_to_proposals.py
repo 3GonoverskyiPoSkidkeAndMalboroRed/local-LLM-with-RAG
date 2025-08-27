@@ -13,9 +13,9 @@ def run_migration():
     """Выполняет миграцию для добавления поля file_path в таблицу предложений"""
     
     # Получаем параметры подключения к базе данных
-    db_host = os.getenv("DB_HOST", "localhost")
+    db_host = os.getenv("DB_HOST", "db")
     db_port = os.getenv("DB_PORT", "3306")
-    db_name = os.getenv("DB_NAME", "db")
+    db_name = os.getenv("DB_NAME", "db_main")
     db_user = os.getenv("DB_USER", "root")
     db_password = os.getenv("DB_PASSWORD", "123123")
     
