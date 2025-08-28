@@ -263,22 +263,28 @@ export default {
         this.mediaPlayerModal.show();
       } else {
         try {
-          // Получаем токен для просмотра документа
-          const tokenResponse = await axiosInstance.get(`/content/view-token/${doc.id}`);
-          const viewToken = tokenResponse.data.view_token;
+          // Для PDF файлов открываем напрямую в браузере
+          if (fileExtension === 'pdf') {
+            const tokenResponse = await axiosInstance.get(`/content/download-token/${doc.id}`);
+            const downloadToken = tokenResponse.data.download_token;
+            const directUrl = `${axiosInstance.defaults.baseURL}/content/public-download/${doc.id}?token=${downloadToken}`;
+            window.open(directUrl, '_blank');
+            return;
+          }
           
-          // Проверяем, является ли файл текстовым для просмотра с выделением
+          // Для текстовых файлов используем просмотр с выделением
           const supportedTextFormats = ['txt', 'md', 'html'];
-          
           if (supportedTextFormats.includes(fileExtension)) {
-            // Для текстовых файлов используем просмотр с выделением
             const viewerUrl = `${axiosInstance.defaults.baseURL}/content/document-viewer-with-highlight/${doc.id}`;
             window.open(viewerUrl, '_blank');
-          } else {
-            // Для остальных файлов используем публичный просмотр с токеном
-            const viewerUrl = `${axiosInstance.defaults.baseURL}/content/public-view/${doc.id}?token=${viewToken}`;
-            window.open(viewerUrl, '_blank');
+            return;
           }
+          
+          // Для остальных файлов используем Google Docs Viewer
+          const tokenResponse = await axiosInstance.get(`/content/view-token/${doc.id}`);
+          const viewToken = tokenResponse.data.view_token;
+          const viewerUrl = `${axiosInstance.defaults.baseURL}/content/public-view/${doc.id}?token=${viewToken}`;
+          window.open(viewerUrl, '_blank');
         } catch (error) {
           console.error("Ошибка при получении токена для просмотра:", error);
           // Fallback к старому методу

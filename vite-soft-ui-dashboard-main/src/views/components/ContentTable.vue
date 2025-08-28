@@ -191,10 +191,29 @@ export default {
       return ['doc', 'docx', 'pdf', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'rtf'].includes(extension);
     },
     
-    // Просмотр документа через Google Docs Viewer
-    viewDocument(content) {
-      const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer/${content.id}`;
-      window.open(viewerUrl, '_blank');
+    // Просмотр документа
+    async viewDocument(content) {
+      try {
+        const fileExtension = this.getFileExtension(content.file_path);
+        
+        // Для PDF файлов открываем напрямую в браузере
+        if (fileExtension === 'pdf') {
+          // Получаем токен для скачивания
+          const tokenResponse = await axiosInstance.get(`/content/download-token/${content.id}`);
+          const downloadToken = tokenResponse.data.download_token;
+          const directUrl = `${import.meta.env.VITE_API_URL}/content/public-download/${content.id}?token=${downloadToken}`;
+          window.open(directUrl, '_blank');
+        } else {
+          // Для остальных форматов используем Google Docs Viewer
+          const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer/${content.id}`;
+          window.open(viewerUrl, '_blank');
+        }
+      } catch (error) {
+        console.error("Ошибка при просмотре документа:", error);
+        // Fallback к старому методу
+        const viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer/${content.id}`;
+        window.open(viewerUrl, '_blank');
+      }
     },
 
     // Скачивание файла с правильной аутентификацией

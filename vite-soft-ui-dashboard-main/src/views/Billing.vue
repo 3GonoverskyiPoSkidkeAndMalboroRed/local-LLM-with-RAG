@@ -369,32 +369,52 @@ export default {
       }
       
       try {
-        // Получаем временный токен для просмотра документа
-        const tokenResponse = await axios.get(`${import.meta.env.VITE_API_URL}/content/view-token/${documentId}`);
-        const viewToken = tokenResponse.data.view_token;
-        
         // Определяем тип файла для выбора правильного способа просмотра
         const fileName = source.file_name || '';
         const fileExtension = fileName.toLowerCase().split('.').pop() || '';
         const supportedTextFormats = ['txt', 'md', 'html'];
         
-        // Формируем URL для публичного просмотра
-        let viewerUrl = `${import.meta.env.VITE_API_URL}/content/public-view/${documentId}?token=${viewToken}`;
-        
-        if (supportedTextFormats.includes(fileExtension) && userQuery) {
-          // Для текстовых файлов добавляем поисковый запрос для выделения
-          const encodedQuery = encodeURIComponent(userQuery);
-          viewerUrl += `&search_query=${encodedQuery}`;
+        // Для PDF файлов открываем напрямую в браузере
+        if (fileExtension === 'pdf') {
+          const tokenResponse = await axios.get(`${import.meta.env.VITE_API_URL}/content/download-token/${documentId}`);
+          const downloadToken = tokenResponse.data.download_token;
+          const directUrl = `${import.meta.env.VITE_API_URL}/content/public-download/${documentId}?token=${downloadToken}`;
+          window.open(directUrl, '_blank');
+          
+          this.showNotification({
+            type: 'success',
+            message: 'PDF документ открыт в новой вкладке'
+          });
+          return;
         }
         
-        // Открываем в новой вкладке
+        // Для текстовых файлов используем просмотр с выделением
+        if (supportedTextFormats.includes(fileExtension)) {
+          let viewerUrl = `${import.meta.env.VITE_API_URL}/content/document-viewer-with-highlight/${documentId}`;
+          if (userQuery) {
+            const encodedQuery = encodeURIComponent(userQuery);
+            viewerUrl += `?search_query=${encodedQuery}`;
+          }
+          window.open(viewerUrl, '_blank');
+          
+          this.showNotification({
+            type: 'success',
+            message: userQuery 
+              ? 'Текстовый документ открыт с выделением найденного отрывка'
+              : 'Текстовый документ открыт'
+          });
+          return;
+        }
+        
+        // Для остальных файлов используем Google Docs Viewer
+        const tokenResponse = await axios.get(`${import.meta.env.VITE_API_URL}/content/view-token/${documentId}`);
+        const viewToken = tokenResponse.data.view_token;
+        const viewerUrl = `${import.meta.env.VITE_API_URL}/content/public-view/${documentId}?token=${viewToken}`;
         window.open(viewerUrl, '_blank');
         
         this.showNotification({
           type: 'success',
-          message: supportedTextFormats.includes(fileExtension) && userQuery 
-            ? 'Документ открыт в новой вкладке с выделением найденного отрывка'
-            : 'Документ открыт в новой вкладке'
+          message: 'Документ открыт в новой вкладке'
         });
         
       } catch (error) {

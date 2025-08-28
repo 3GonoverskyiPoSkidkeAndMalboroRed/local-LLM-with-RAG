@@ -969,13 +969,20 @@ async def download_file(
         # Если не получается, используем URL-кодирование
         filename_encoded = urllib.parse.quote(filename)
     
+    # Определяем, нужно ли открывать файл в браузере или скачивать
+    file_extension = file_path.lower().split('.')[-1] if '.' in file_path else ''
+    is_pdf = file_extension == 'pdf'
+    
+    # Для PDF файлов используем inline, для остальных - attachment
+    disposition = "inline" if is_pdf else "attachment"
+    
     # Возвращаем файл как ответ с правильным MIME-типом
     return FileResponse(
         file_path, 
         media_type=mime_type, 
         filename=filename_encoded,
         headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}",
+            "Content-Disposition": f"{disposition}; filename*=UTF-8''{urllib.parse.quote(filename)}",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
             "Access-Control-Allow-Headers": "*"
@@ -1063,13 +1070,20 @@ async def public_download_file(
         # Определяем MIME-тип файла
         mime_type = get_mime_type(file_path)
         
+        # Определяем, нужно ли открывать файл в браузере или скачивать
+        file_extension = file_path.lower().split('.')[-1] if '.' in file_path else ''
+        is_pdf = file_extension == 'pdf'
+        
+        # Для PDF файлов используем inline, для остальных - attachment
+        disposition = "inline" if is_pdf else "attachment"
+        
         # Возвращаем файл как ответ с правильным MIME-типом
         return FileResponse(
             file_path, 
             media_type=mime_type, 
             filename=filename_encoded,
             headers={
-                "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"
+                "Content-Disposition": f"{disposition}; filename*=UTF-8''{urllib.parse.quote(filename)}"
             }
         )
         
