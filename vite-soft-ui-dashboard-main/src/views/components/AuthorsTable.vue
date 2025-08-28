@@ -22,9 +22,9 @@
               <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">
                 ФИО
               </th>
-              <!-- <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
+              <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
                 Роль
-              </th> -->
+              </th>
               <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">
                 Отдел
               </th>
@@ -46,9 +46,9 @@
               <td>
                 <p class="text-xs font-weight-bold mb-0">{{ user.full_name }}</p>
               </td>
-              <!-- <td>
+              <td>
                 <p class="text-xs font-weight-bold mb-0">{{ user.role_name }}</p>
-              </td> -->
+              </td>
               <td>
                 <p class="text-xs font-weight-bold mb-0">{{ user.department_name }}</p>
               </td>

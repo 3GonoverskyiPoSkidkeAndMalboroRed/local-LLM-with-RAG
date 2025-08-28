@@ -23,10 +23,11 @@
         </div>
         <div class="col-auto my-auto">
           <div class="h-100">
-            <h5 class="mb-1">{{ user.login }} - <span class="text-sm">{{ user.full_name }}</span></h5>
+            <h5 class="mb-1">{{ user.login }}</h5>
+            <p class="mb-0 text-sm font-weight-bold">ФИО: {{ user.full_name }}</p>
+            <p class="mb-0 text-sm font-weight-bold">Роль: {{ user.role_name }}</p>
             <p class="mb-0 text-sm font-weight-bold">Отдел: {{ user.department_name }}</p>
-            <p class="mb-0 text-sm font-weight-bold">Доступ: {{ user.access_name }}</p>
-            
+            <p class="mb-0 text-sm font-weight-bold">Уровень доступа: {{ user.access_name }}</p>
           </div>
         </div>
         <div
@@ -41,13 +42,10 @@
   </div>
   <div class="py-4 container-fluid">
     <div class="mt-3 row">
-
-      <!-- <div class="mt-4 col-12 col-md-6 col-xl-4 mt-md-0">
-       
-      </div> -->
-      
+      <div class="mt-4 col-12 col-md-6 col-xl-4 mt-md-0">
+        <ProfileCard :user="user" />
+      </div>
     </div>
-    
   </div>
 </template>
 
