@@ -111,7 +111,7 @@
                 <label class="form-label text-white">Отдел</label>
                 <select class="form-select" v-model="selectedDepartment" required>
                   <option v-for="department in departments" :key="department.id" :value="department.id">
-                    {{ department.department_name }}
+                    {{ department.name }}
                   </option>
                 </select>
               </div>
@@ -200,11 +200,11 @@ export default {
         this.roles = rolesResponse.data;
         
         // Загружаем отделы
-        const departmentsResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/departments`);
+        const departmentsResponse = await axios.get(`${import.meta.env.VITE_API_URL}/departments`);
         this.departments = departmentsResponse.data;
         
         // Загружаем уровни доступа
-        const accessResponse = await axios.get(`${import.meta.env.VITE_API_URL}/api/access_levels`);
+        const accessResponse = await axios.get(`${import.meta.env.VITE_API_URL}/access-levels`);
         this.accessLevels = accessResponse.data;
         
         // Устанавливаем значения по умолчанию

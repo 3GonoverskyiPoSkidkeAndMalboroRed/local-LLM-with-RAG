@@ -69,7 +69,7 @@
                       <label for="department" class="form-label">Отдел</label>
                       <select class="form-select" id="department" v-model="registerForm.department_id" required>
                         <option v-for="department in departments" :key="department.id" :value="department.id">
-                          {{ department.department_name }}
+                          {{ department.name }}
                         </option>
                       </select>
                     </div>
@@ -119,7 +119,7 @@
                           <label for="department" class="form-label">Отдел</label>
                           <select class="form-select" id="department" v-model="contentForm.department_id" required>
                             <option v-for="department in departments" :key="department.id" :value="department.id">
-                              {{ department.department_name }}
+                              {{ department.name }}
                             </option>
                           </select>
                           <small class="text-muted">Файлы будут автоматически сохранены в папку ContentForDepartment/AllTypesOfFiles/{ID отдела}</small>
@@ -160,7 +160,7 @@
                           <label for="batch_department" class="form-label">Отдел</label>
                           <select class="form-select" id="batch_department" v-model="batchForm.department_id" required>
                             <option v-for="department in departments" :key="department.id" :value="department.id">
-                              {{ department.department_name }}
+                              {{ department.name }}
                             </option>
                           </select>
                         </div>
@@ -302,7 +302,7 @@
                           <label for="quiz-department" class="form-label">Отдел</label>
                           <select class="form-select" id="quiz-department" v-model="quizForm.department_id" required>
                             <option v-for="department in departments" :key="department.id" :value="department.id">
-                              {{ department.department_name }}
+                              {{ department.name }}
                             </option>
                           </select>
                         </div>
@@ -412,7 +412,7 @@
                         <select class="form-select" v-model="quizFilter.department">
                           <option value="all">Все отделы</option>
                           <option v-for="department in departments" :key="department.id" :value="department.id">
-                            {{ department.department_name }}
+                            {{ department.name }}
                           </option>
                         </select>
                       </div>
@@ -883,7 +883,7 @@ export default {
     // Получение списка отделов
     async fetchDepartments() {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/departments`);
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/departments`);
         this.departments = response.data;
       } catch (error) {
         console.error('Ошибка при получении отделов:', error);
@@ -894,10 +894,10 @@ export default {
     // Получение списка уровней доступа
     async fetchAccessLevels() {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/access_levels`);
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/access-levels`);
         this.accessLevels = response.data;
       } catch (error) {
-        console.error('Ошибка при получении отделов:', error);
+        console.error('Ошибка при получении уровней доступа:', error);
         this.accessLevels = [];
       }
     },
@@ -1396,7 +1396,7 @@ export default {
     getDepartmentName(id) {
       if (!id) return null;
       const department = this.departments.find(d => d.id === id);
-      return department ? department.department_name : id;
+      return department ? department.name : id;
     },
     
     getAccessLevelName(id) {
