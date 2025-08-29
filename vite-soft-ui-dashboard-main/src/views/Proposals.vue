@@ -20,7 +20,7 @@
               </li>
               <li class="nav-item" role="presentation">
                 <button class="nav-link" id="my-proposals-tab" data-bs-toggle="tab" data-bs-target="#my-proposals" type="button" role="tab" aria-controls="my-proposals" aria-selected="false">
-                  Мои предложения
+                  Все предложения
                 </button>
               </li>
               <li class="nav-item" role="presentation" v-if="isReviewer">
@@ -99,9 +99,11 @@
                       <thead>
                         <tr>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Название</th>
+                          <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Автор</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Отдел</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Статус</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Дата создания</th>
+                          <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Рецензент</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Действия</th>
                         </tr>
                       </thead>
@@ -116,6 +118,14 @@
                             </div>
                           </td>
                           <td>
+                            <div class="d-flex flex-column">
+                              <p class="text-xs font-weight-bold mb-0">{{ proposal.proposer_name || 'Неизвестный пользователь' }}</p>
+                              <small class="text-muted" v-if="proposal.proposer_name && proposal.proposer_name !== proposal.proposed_by">
+                                ID: {{ proposal.proposed_by }}
+                              </small>
+                            </div>
+                          </td>
+                          <td>
                             <p class="text-xs font-weight-bold mb-0">{{ proposal.department_name }}</p>
                           </td>
                           <td>
@@ -125,6 +135,15 @@
                           </td>
                           <td>
                             <p class="text-xs font-weight-bold mb-0">{{ formatDate(proposal.created_at) }}</p>
+                          </td>
+                          <td>
+                            <div class="d-flex flex-column">
+                              <p class="text-xs font-weight-bold mb-0" v-if="proposal.reviewer_name">{{ proposal.reviewer_name }}</p>
+                              <p class="text-xs text-muted mb-0" v-else>-</p>
+                              <small v-if="proposal.reviewer_name && proposal.updated_at && proposal.updated_at !== proposal.created_at" class="text-muted">
+                                {{ formatDate(proposal.updated_at) }}
+                              </small>
+                            </div>
                           </td>
                           <td>
                             <button class="btn btn-sm btn-outline-info" @click="viewProposal(proposal)">
@@ -156,6 +175,7 @@
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Автор</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Отдел</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Дата создания</th>
+                          <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Рецензент</th>
                           <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Действия</th>
                         </tr>
                       </thead>
@@ -170,13 +190,27 @@
                             </div>
                           </td>
                           <td>
-                            <p class="text-xs font-weight-bold mb-0">{{ proposal.proposer_name }}</p>
+                            <div class="d-flex flex-column">
+                              <p class="text-xs font-weight-bold mb-0">{{ proposal.proposer_name }}</p>
+                              <small class="text-muted" v-if="proposal.proposer_name && proposal.proposer_name !== proposal.proposed_by">
+                                ID: {{ proposal.proposed_by }}
+                              </small>
+                            </div>
                           </td>
                           <td>
                             <p class="text-xs font-weight-bold mb-0">{{ proposal.department_name }}</p>
                           </td>
                           <td>
                             <p class="text-xs font-weight-bold mb-0">{{ formatDate(proposal.created_at) }}</p>
+                          </td>
+                          <td>
+                            <div class="d-flex flex-column">
+                              <p class="text-xs font-weight-bold mb-0" v-if="proposal.reviewer_name">{{ proposal.reviewer_name }}</p>
+                              <p class="text-xs text-muted mb-0" v-else>-</p>
+                              <small v-if="proposal.reviewer_name && proposal.updated_at && proposal.updated_at !== proposal.created_at" class="text-muted">
+                                {{ formatDate(proposal.updated_at) }}
+                              </small>
+                            </div>
                           </td>
                           <td>
                             <button class="btn btn-sm btn-outline-info" @click="viewProposal(proposal)">
@@ -219,7 +253,7 @@
                 <h6>Основная информация</h6>
                 <p><strong>Название:</strong> {{ selectedProposal.title }}</p>
                 <p><strong>Описание:</strong> {{ selectedProposal.description || 'Не указано' }}</p>
-                <p><strong>Автор:</strong> {{ selectedProposal.proposer_name }}</p>
+                <p><strong>Автор:</strong> {{ selectedProposal.proposer_name || 'Неизвестный пользователь' }}</p>
                 <p><strong>Отдел:</strong> {{ selectedProposal.department_name }}</p>
                 <p><strong>Уровень доступа:</strong> {{ selectedProposal.access_name }}</p>
                 <p><strong>Тег:</strong> {{ selectedProposal.tag_name || 'Не указан' }}</p>
@@ -228,7 +262,11 @@
                     {{ getStatusText(selectedProposal.status) }}
                   </span>
                 </p>
+                <p v-if="selectedProposal.reviewer_name"><strong>Рецензент:</strong> {{ selectedProposal.reviewer_name }}</p>
                 <p><strong>Дата создания:</strong> {{ formatDate(selectedProposal.created_at) }}</p>
+                <p v-if="selectedProposal.updated_at && selectedProposal.updated_at !== selectedProposal.created_at">
+                  <strong>Дата рассмотрения:</strong> {{ formatDate(selectedProposal.updated_at) }}
+                </p>
               </div>
               <div class="col-md-6">
                 <h6>Файл</h6>

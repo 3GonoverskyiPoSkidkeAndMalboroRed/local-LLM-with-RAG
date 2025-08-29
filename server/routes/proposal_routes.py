@@ -185,7 +185,7 @@ async def create_proposal(
         'created_at': proposal.created_at.isoformat() if proposal.created_at else None,
         'updated_at': proposal.updated_at.isoformat() if proposal.updated_at else None,
         'file_path': proposal.file_path,
-        'proposer_name': proposer.full_name if proposer else None,
+        'proposer_name': proposer.full_name if proposer and proposer.full_name else (proposer.login if proposer else "Неизвестный пользователь"),
         'department_name': department.department_name if department else None,
         'access_name': access.access_name if access else None,
     }
@@ -252,8 +252,8 @@ async def get_proposals(
             created_at=proposal.created_at.isoformat() if proposal.created_at else None,
             updated_at=proposal.updated_at.isoformat() if proposal.updated_at else None,
             file_path=proposal.file_path,
-            proposer_name=proposer.full_name if proposer else None,
-            reviewer_name=reviewer.full_name if reviewer else None,
+            proposer_name=proposer.full_name if proposer and proposer.full_name else (proposer.login if proposer else "Неизвестный пользователь"),
+            reviewer_name=reviewer.full_name if reviewer and reviewer.full_name else (reviewer.login if reviewer else None),
             department_name=department.department_name if department else None,
             access_name=access.access_name if access else None,
             tag_name=tag.tag_name if tag else None
@@ -319,8 +319,8 @@ async def get_proposal(
         created_at=proposal.created_at,
         updated_at=proposal.updated_at,
         file_path=proposal.file_path,
-        proposer_name=proposer.full_name if proposer else None,
-        reviewer_name=reviewer.full_name if reviewer else None,
+        proposer_name=proposer.full_name if proposer and proposer.full_name else (proposer.login if proposer else "Неизвестный пользователь"),
+        reviewer_name=reviewer.full_name if reviewer and reviewer.full_name else (reviewer.login if reviewer else None),
         department_name=department.department_name if department else None,
         access_name=access.access_name if access else None,
         tag_name=tag.tag_name if tag else None
